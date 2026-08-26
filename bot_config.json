@@ -1,0 +1,68 @@
+{
+  "telegram": {
+    "apiId": "37121266",
+    "apiHash": "413cfa41976887942b3b280c642d53c2",
+    "phone": "2349076187712",
+    "isConnected": true,
+    "sessionString": "1BAAOMTQ5LjE1NC4xNjcuOTEAUAsIZwBUp/ABtqyymLgDAxfByoE9qQMQzq5qFP7lHLZFdyMaVN6gBSF9HoPEbTd9InLR35dqRq3ysvpUNbhlh+kWTVuim1XpV6HK07Wbiz+X3jlQ8vi+ZvCJkSiO5/QslOPSOTGB+AR4SeoWTX4RnIx1X2XaN29H13pHFSwatWNrdqtBjkYTJ4gC3ogolcePbL1CgGeijBAe+wBLGDP1jbo8vf6v+ubMBYT+6KYrnrWdL3phWqcLTrHNZynXADSt1EmX50zMjLanppuWESLQBGtdzKjVU0EEoWVgDe8nnnNYSrO03JF4X2NI2oXrs9B2dKbtXWVRBoA5HXYYipVWYBw="
+  },
+  "iqOption": {
+    "email": "mattmichsam@gmail.com",
+    "password": "Rahmon777",
+    "accountMode": "PRACTICE",
+    "isConnected": true,
+    "balance": 10000,
+    "practiceBalance": 10000,
+    "realBalance": 0,
+    "currency": "NGN"
+  },
+  "settings": {
+    "isEnabled": true,
+    "accountMode": "PRACTICE",
+    "baseStake": 100,
+    "minPayout": 80,
+    "martingaleMultiplier": 2.2,
+    "maxGaleSteps": 1,
+    "dailyStopLoss": 500,
+    "dailyTakeProfit": 1000,
+    "ignoreTelegramMartingale": true,
+    "waitForActualResult": true,
+    "managementLevels": {
+      "level1": {
+        "enabled": true,
+        "entryDelaySeconds": 0,
+        "stakeMode": "MULTIPLIER",
+        "stakeMultiplier": 2.2,
+        "customStake": 220,
+        "direction": "SAME",
+        "durationMinutes": 1,
+        "maxAllowedDelayMs": 4000
+      },
+      "level2": {
+        "enabled": true,
+        "entryDelaySeconds": 0,
+        "stakeMode": "MULTIPLIER",
+        "stakeMultiplier": 2.2,
+        "customStake": 484,
+        "direction": "SAME",
+        "durationMinutes": 1,
+        "maxAllowedDelayMs": 4000
+      },
+      "level3": {
+        "enabled": false,
+        "entryDelaySeconds": 0,
+        "stakeMode": "MULTIPLIER",
+        "stakeMultiplier": 2.2,
+        "customStake": 1064,
+        "direction": "SAME",
+        "durationMinutes": 1,
+        "maxAllowedDelayMs": 4000
+      }
+    }
+  },
+  "selectedChannels": [
+    "-1002260951553",
+    "-1004402687070"
+  ],
+  "updatedAt": "2026-08-26T15:21:30.469Z"
+}

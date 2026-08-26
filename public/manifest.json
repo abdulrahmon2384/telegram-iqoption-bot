@@ -1,0 +1,37 @@
+{
+  "name": "SignalBot - Telegram IQ Option Trading Bot",
+  "short_name": "SignalBot",
+  "description": "Automated Telegram VIP signal listener and IQ Option trading engine with continuous sync, native alerts, and screen wake lock.",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay", "minimal-ui"],
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "portrait-primary",
+  "categories": ["finance", "utilities", "business", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512 any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512 any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open Live Bot",
+      "short_name": "Live Bot",
+      "description": "Open live Telegram VIP signal monitor and auto-trade executor",
+      "url": "/",
+      "icons": [{ "src": "/icon.svg", "sizes": "96x96" }]
+    }
+  ]
+}

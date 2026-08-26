@@ -1,0 +1,6 @@
+{
+  "name": "Telegram IQ Option Trading Bot",
+  "description": "Progressive Web App (PWA) automated Telegram VIP signal listener and IQ Option trading engine featuring 24/7 background sync, screen wake lock management, synthesized native audio chimes, and browser push notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
