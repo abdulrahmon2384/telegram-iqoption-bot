@@ -13,8 +13,11 @@ import { formatTimeInTz, getActiveTimezone } from "./timezone_helper";
 export interface IQBalances {
   PRACTICE: number;
   REAL: number;
+  bonus?: number;
+  totalReal?: number;
   practiceBalanceId?: number;
   realBalanceId?: number;
+  bonusBalanceId?: number;
   currency: string;
 }
 
@@ -68,6 +71,30 @@ export function isAssetUnavailableError(errMsg?: string): boolean {
     lower.includes("asset_not_found") ||
     lower.includes("time is not valid") ||
     lower.includes("instrument is disabled")
+  );
+}
+
+// Helper to detect broker error indicating insufficient balance or low funds on broker side
+export function isInsufficientBalanceError(errMsg?: string): boolean {
+  if (!errMsg) return false;
+  const lower = errMsg.toLowerCase();
+  return (
+    lower.includes("not enough balance") ||
+    lower.includes("not_enough_balance") ||
+    lower.includes("insufficient_balance") ||
+    lower.includes("insufficient balance") ||
+    lower.includes("not enough money") ||
+    lower.includes("not enough funds") ||
+    lower.includes("not_enough_funds") ||
+    lower.includes("balance_is_not_enough") ||
+    lower.includes("balance_not_enough") ||
+    lower.includes("low balance") ||
+    lower.includes("low_balance") ||
+    lower.includes("balance is zero") ||
+    lower.includes("not have enough funds") ||
+    lower.includes("not have enough balance") ||
+    lower.includes("funds_insufficient") ||
+    lower.includes("balance is not enough")
   );
 }
 
@@ -224,9 +251,12 @@ export class IQOptionClient {
 
   public getActiveBalanceAmount(): number {
     if (!this.userProfile) return this.accountMode === "REAL" ? 0 : 10000;
-    return this.accountMode === "REAL"
-      ? this.userProfile.balances.REAL
-      : this.userProfile.balances.PRACTICE;
+    if (this.accountMode === "REAL") {
+      const real = this.userProfile.balances.REAL || 0;
+      const bonus = this.userProfile.balances.bonus || 0;
+      return real > 0 ? real : (bonus > 0 ? bonus : real);
+    }
+    return this.userProfile.balances.PRACTICE;
   }
 
   public setAccountMode(mode: "PRACTICE" | "REAL") {
@@ -406,10 +436,12 @@ export class IQOptionClient {
 
         const res = json.result || json.data || json;
         if (res && (typeof res === "object" || Array.isArray(res))) {
-          let practiceBal = this.userProfile?.balances?.PRACTICE ?? 10000;
-          let realBal = this.userProfile?.balances?.REAL ?? 0;
+          let practiceBal = this.userProfile?.balances?.PRACTICE ?? 10000.0;
+          let realBal = this.userProfile?.balances?.REAL ?? 0.0;
+          let bonusBal = this.userProfile?.balances?.bonus ?? 0.0;
           let practiceBalanceId = this.userProfile?.balances?.practiceBalanceId;
           let realBalanceId = this.userProfile?.balances?.realBalanceId;
+          let bonusBalanceId = this.userProfile?.balances?.bonusBalanceId;
           let currency = res.currency || this.userProfile?.currency || "USD";
           let id = res.id || res.user_id || this.userProfile?.id || 0;
           let name = res.name || res.first_name || (res.email ? res.email.split("@")[0] : "IQ Trader");
@@ -419,6 +451,7 @@ export class IQOptionClient {
             for (const b of res) {
               const bType = b.type;
               const bAmount = typeof b.amount === "number" ? b.amount : parseFloat(b.amount || 0);
+              const bBonus = typeof b.bonus_amount === "number" ? b.bonus_amount : (typeof b.bonus === "number" ? b.bonus : parseFloat(b.bonus_amount || b.bonus || 0));
               if (b.currency) currency = b.currency;
               if (bType === 4) {
                 practiceBal = bAmount;
@@ -426,12 +459,17 @@ export class IQOptionClient {
               } else if (bType === 1) {
                 realBal = bAmount;
                 realBalanceId = b.id;
+                if (bBonus > 0) bonusBal += bBonus;
+              } else if (bType === 2) {
+                bonusBal += bAmount;
+                bonusBalanceId = b.id;
               }
             }
           } else if (Array.isArray(res.balances)) {
             for (const b of res.balances) {
               const bType = b.type;
               const bAmount = typeof b.amount === "number" ? b.amount : parseFloat(b.amount || 0);
+              const bBonus = typeof b.bonus_amount === "number" ? b.bonus_amount : (typeof b.bonus === "number" ? b.bonus : parseFloat(b.bonus_amount || b.bonus || 0));
               if (b.currency) currency = b.currency;
               if (bType === 4) {
                 practiceBal = bAmount;
@@ -439,6 +477,10 @@ export class IQOptionClient {
               } else if (bType === 1) {
                 realBal = bAmount;
                 realBalanceId = b.id;
+                if (bBonus > 0) bonusBal += bBonus;
+              } else if (bType === 2) {
+                bonusBal += bAmount;
+                bonusBalanceId = b.id;
               }
             }
           } else if (typeof res.balance === "number" || typeof res.balance === "string") {
@@ -448,7 +490,7 @@ export class IQOptionClient {
           }
 
           const activeBalanceId = this.accountMode === "REAL"
-            ? (realBalanceId || res.balance_id || 0)
+            ? (realBalanceId || bonusBalanceId || res.balance_id || 0)
             : (practiceBalanceId || res.balance_id || 0);
 
           this.userProfile = {
@@ -459,15 +501,18 @@ export class IQOptionClient {
             balances: {
               PRACTICE: practiceBal,
               REAL: realBal,
+              bonus: bonusBal,
+              totalReal: realBal + bonusBal,
               practiceBalanceId,
               realBalanceId,
+              bonusBalanceId,
               currency,
             },
             activeAccountMode: this.accountMode,
             activeBalanceId,
           };
 
-          console.log(`[IQ Option REST Sync] Live Profile Loaded from ${url}: User #${id} | Real: $${realBal.toFixed(2)} | Practice: $${practiceBal.toFixed(2)} ${currency}`);
+          console.log(`[IQ Option REST Sync] Live Profile Loaded from ${url}: User #${id} | Real: $${realBal.toFixed(2)}${bonusBal > 0 ? ` (+Bonus: $${bonusBal.toFixed(2)})` : ""} | Practice: $${practiceBal.toFixed(2)} ${currency}`);
           return true;
         }
       } catch (err) {
@@ -934,19 +979,26 @@ export class IQOptionClient {
 
     let practiceBal = this.userProfile?.balances?.PRACTICE ?? 10000.0;
     let realBal = this.userProfile?.balances?.REAL ?? 0.0;
+    let bonusBal = this.userProfile?.balances?.bonus ?? 0.0;
     let practiceBalanceId: number | undefined = this.userProfile?.balances?.practiceBalanceId;
     let realBalanceId: number | undefined = this.userProfile?.balances?.realBalanceId;
+    let bonusBalanceId: number | undefined = this.userProfile?.balances?.bonusBalanceId;
 
     if (Array.isArray(res.balances)) {
       for (const b of res.balances) {
         const bType = b.type;
         const bAmount = typeof b.amount === "number" ? b.amount : parseFloat(b.amount || 0);
+        const bBonus = typeof b.bonus_amount === "number" ? b.bonus_amount : (typeof b.bonus === "number" ? b.bonus : parseFloat(b.bonus_amount || b.bonus || 0));
         if (bType === 4) {
           practiceBal = bAmount;
           practiceBalanceId = b.id;
         } else if (bType === 1) {
           realBal = bAmount;
           realBalanceId = b.id;
+          if (bBonus > 0) bonusBal += bBonus;
+        } else if (bType === 2) {
+          bonusBal += bAmount;
+          bonusBalanceId = b.id;
         }
       }
     } else if (typeof res.balance === "number") {
@@ -955,7 +1007,7 @@ export class IQOptionClient {
     }
 
     const activeBalanceId = this.accountMode === "REAL"
-      ? (realBalanceId || res.balance_id || 0)
+      ? (realBalanceId || bonusBalanceId || res.balance_id || 0)
       : (practiceBalanceId || res.balance_id || 0);
 
     this.userProfile = {
@@ -966,27 +1018,33 @@ export class IQOptionClient {
       balances: {
         PRACTICE: practiceBal,
         REAL: realBal,
+        bonus: bonusBal,
+        totalReal: realBal + bonusBal,
         practiceBalanceId,
         realBalanceId,
+        bonusBalanceId,
         currency,
       },
       activeAccountMode: this.accountMode,
       activeBalanceId,
     };
 
-    console.log(`[IQ Option WS Profile Loaded] User #${id} | Practice: $${practiceBal.toFixed(2)} | Real: $${realBal.toFixed(2)} ${currency}`);
+    console.log(`[IQ Option WS Profile Loaded] User #${id} | Practice: $${practiceBal.toFixed(2)} | Real: $${realBal.toFixed(2)}${bonusBal > 0 ? ` (+Bonus: $${bonusBal.toFixed(2)})` : ""} ${currency}`);
   }
 
   private handleBalancesArray(balances: any[]) {
     let practiceBal = this.userProfile?.balances?.PRACTICE ?? 10000.0;
     let realBal = this.userProfile?.balances?.REAL ?? 0.0;
+    let bonusBal = this.userProfile?.balances?.bonus ?? 0.0;
     let practiceBalanceId = this.userProfile?.balances?.practiceBalanceId;
     let realBalanceId = this.userProfile?.balances?.realBalanceId;
+    let bonusBalanceId = this.userProfile?.balances?.bonusBalanceId;
     let currency = this.userProfile?.currency || "USD";
 
     for (const b of balances) {
       const bType = b.type;
       const bAmount = typeof b.amount === "number" ? b.amount : parseFloat(b.amount || 0);
+      const bBonus = typeof b.bonus_amount === "number" ? b.bonus_amount : (typeof b.bonus === "number" ? b.bonus : parseFloat(b.bonus_amount || b.bonus || 0));
       if (b.currency) currency = b.currency;
       if (bType === 4) {
         practiceBal = bAmount;
@@ -994,14 +1052,21 @@ export class IQOptionClient {
       } else if (bType === 1) {
         realBal = bAmount;
         realBalanceId = b.id;
+        if (bBonus > 0) bonusBal += bBonus;
+      } else if (bType === 2) {
+        bonusBal += bAmount;
+        bonusBalanceId = b.id;
       }
     }
 
     if (this.userProfile) {
       this.userProfile.balances.PRACTICE = practiceBal;
       this.userProfile.balances.REAL = realBal;
+      this.userProfile.balances.bonus = bonusBal;
+      this.userProfile.balances.totalReal = realBal + bonusBal;
       this.userProfile.balances.practiceBalanceId = practiceBalanceId;
       this.userProfile.balances.realBalanceId = realBalanceId;
+      this.userProfile.balances.bonusBalanceId = bonusBalanceId;
       this.userProfile.currency = currency;
       this.userProfile.balances.currency = currency;
     } else {
@@ -1013,12 +1078,15 @@ export class IQOptionClient {
         balances: {
           PRACTICE: practiceBal,
           REAL: realBal,
+          bonus: bonusBal,
+          totalReal: realBal + bonusBal,
           practiceBalanceId,
           realBalanceId,
+          bonusBalanceId,
           currency,
         },
         activeAccountMode: this.accountMode,
-        activeBalanceId: this.accountMode === "REAL" ? realBalanceId : practiceBalanceId,
+        activeBalanceId: this.accountMode === "REAL" ? (realBalanceId || bonusBalanceId) : practiceBalanceId,
       };
     }
   }
@@ -1027,6 +1095,7 @@ export class IQOptionClient {
     const current = data.current_balance || data.balance || data;
     const bType = current.type;
     const bAmount = typeof current.amount === "number" ? current.amount : parseFloat(current.amount || 0);
+    const bBonus = typeof current.bonus_amount === "number" ? current.bonus_amount : (typeof current.bonus === "number" ? current.bonus : parseFloat(current.bonus_amount || current.bonus || 0));
 
     if (!this.userProfile) {
       this.userProfile = {
@@ -1037,8 +1106,11 @@ export class IQOptionClient {
         balances: {
           PRACTICE: bType === 4 ? bAmount : 10000,
           REAL: bType === 1 ? bAmount : 0,
+          bonus: bType === 2 ? bAmount : bBonus,
+          totalReal: (bType === 1 ? bAmount : 0) + (bType === 2 ? bAmount : bBonus),
           practiceBalanceId: bType === 4 ? current.id : undefined,
           realBalanceId: bType === 1 ? current.id : undefined,
+          bonusBalanceId: bType === 2 ? current.id : undefined,
           currency: data.currency || "USD",
         },
         activeAccountMode: this.accountMode,
@@ -1052,7 +1124,13 @@ export class IQOptionClient {
       if (current.id) this.userProfile.balances.practiceBalanceId = current.id;
     } else if (bType === 1) {
       this.userProfile.balances.REAL = bAmount;
+      if (bBonus > 0) this.userProfile.balances.bonus = bBonus;
+      this.userProfile.balances.totalReal = bAmount + (this.userProfile.balances.bonus || 0);
       if (current.id) this.userProfile.balances.realBalanceId = current.id;
+    } else if (bType === 2) {
+      this.userProfile.balances.bonus = bAmount;
+      this.userProfile.balances.totalReal = (this.userProfile.balances.REAL || 0) + bAmount;
+      if (current.id) this.userProfile.balances.bonusBalanceId = current.id;
     }
   }
 
@@ -1161,9 +1239,9 @@ export class IQOptionClient {
       };
     }
 
-    // 2. Select balance ID
+    // 2. Select balance ID (Supports cash accounts, bonus accounts, and promotional accounts)
     const userBalanceId = mode === "REAL"
-      ? (this.userProfile.balances.realBalanceId || this.userProfile.activeBalanceId)
+      ? (this.userProfile.balances.realBalanceId || this.userProfile.balances.bonusBalanceId || this.userProfile.activeBalanceId)
       : (this.userProfile.balances.practiceBalanceId || this.userProfile.activeBalanceId);
 
     if (!userBalanceId) {
@@ -1180,17 +1258,12 @@ export class IQOptionClient {
     const currentBalance = mode === "REAL"
       ? this.userProfile.balances.REAL
       : this.userProfile.balances.PRACTICE;
+    const bonusBalance = this.userProfile.balances.bonus || 0;
 
-    if (currentBalance < stake) {
-      return {
-        success: false,
-        asset,
-        action,
-        stake,
-        duration,
-        error: `Insufficient ${mode} balance ($${currentBalance.toFixed(2)}) for requested stake of $${stake.toFixed(2)}.`,
-      };
-    }
+    // Professional balance handling: We DO NOT locally pre-block trades when balance is zero or low.
+    // Real accounts may hold bonus funds, trading credits, or promotional balances enabled for live execution.
+    // The order is dispatched directly to IQ Option broker to allow server-authoritative validation.
+    console.log(`[IQ Option Dispatch] Mode: ${mode} | UserBalanceId: ${userBalanceId} | Cash: $${currentBalance.toFixed(2)}${mode === "REAL" && bonusBalance > 0 ? ` (+Bonus: $${bonusBalance.toFixed(2)})` : ""} | Stake: $${stake.toFixed(2)} | Submitting order to broker...`);
 
     const nowSec = Math.floor(Date.now() / 1000);
 
@@ -1304,13 +1377,18 @@ export class IQOptionClient {
 
             // If error is NOT an asset availability/closed error (e.g. balance or stake issue), stop iterating
             if (!isAssetUnavailableError(rejectReason)) {
+              const isInsufficientFunds = isInsufficientBalanceError(rejectReason);
+              const formattedError = isInsufficientFunds
+                ? `Insufficient balance on IQ Option broker: ${rejectReason}`
+                : `IQ Option Broker Rejected: ${rejectReason}`;
+
               return {
                 success: false,
                 asset: candidate.targetAsset,
                 action,
                 stake,
                 duration,
-                error: `IQ Option Broker Rejected: ${rejectReason}`,
+                error: formattedError,
                 isSimulated: false,
               };
             }

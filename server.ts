@@ -681,6 +681,7 @@ async function startServer() {
         const activeBal = status.activeBalance;
         const practiceBal = status.balances.PRACTICE;
         const realBal = status.balances.REAL;
+        const bonusBal = status.balances.bonus || 0;
         const currency = status.balances.currency || "USD";
 
         // Persist connected status into Supabase if configured
@@ -709,6 +710,7 @@ async function startServer() {
           balance: activeBal,
           practiceBalance: practiceBal,
           realBalance: realBal,
+          bonusBalance: bonusBal,
           currency,
         };
         safeWriteJsonFile(CONFIG_FILE, existing);
@@ -719,6 +721,7 @@ async function startServer() {
           balance: activeBal,
           practiceBalance: practiceBal,
           realBalance: realBal,
+          bonusBalance: bonusBal,
           currency,
           accountMode,
           payoutRate: 87,
@@ -763,6 +766,7 @@ async function startServer() {
         activeBalance: status.activeBalance,
         practiceBalance: status.balances.PRACTICE,
         realBalance: status.balances.REAL,
+        bonusBalance: status.balances.bonus || 0,
         currency: status.balances.currency || "USD",
         accountMode: status.accountMode,
       });

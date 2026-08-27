@@ -605,9 +605,16 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                   }`} />
                   <span>Real Account</span>
                 </div>
-                <span className="font-mono text-[11px] text-emerald-400 font-bold">
-                  ${(iqConfig.realBalance ?? 0).toFixed(2)} {iqConfig.currency || "USD"}
-                </span>
+                <div className="text-right">
+                  <div className="font-mono text-[11px] text-emerald-400 font-bold">
+                    ${(iqConfig.realBalance ?? 0).toFixed(2)} {iqConfig.currency || "USD"}
+                  </div>
+                  {Boolean(iqConfig.bonusBalance && iqConfig.bonusBalance > 0) && (
+                    <div className="text-[9px] text-emerald-300/80 font-mono">
+                      + Bonus: ${iqConfig.bonusBalance?.toFixed(2)}
+                    </div>
+                  )}
+                </div>
               </button>
             </div>
           </div>

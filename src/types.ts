@@ -225,6 +225,7 @@ export interface IQOptionConfig {
   balance?: number;
   practiceBalance?: number;
   realBalance?: number;
+  bonusBalance?: number;
   currency?: string;
 }
 

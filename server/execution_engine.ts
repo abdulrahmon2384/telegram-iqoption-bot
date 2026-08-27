@@ -56,7 +56,7 @@ import {
   normalizeTimeZone,
   extractSignalLevelCheckpoints,
 } from "./timezone_helper";
-import { globalIQClient, isAssetUnavailableError } from "./iqoption_client";
+import { globalIQClient, isAssetUnavailableError, isInsufficientBalanceError } from "./iqoption_client";
 
 export type TradeState =
   | "SIGNAL_RECEIVED"
@@ -552,6 +552,11 @@ export class TradeExecutionEngine {
               `[ASSET UNAVAILABLE / MARKET CLOSED] ${trade.asset} (and counterpart OTC) is not open for trading right now on IQ Option. Trade skipped safely.`,
               "warn"
             );
+          } else if (isInsufficientBalanceError(errorMsg)) {
+            trade.state = "FAILED";
+            trade.failReason = errorMsg;
+            trade.outcome = "FAILED";
+            this.addTradeLog(trade, `[INSUFFICIENT FUNDS / BROKER REJECTED] IQ Option broker confirmed insufficient balance/bonus: ${errorMsg}`, "error");
           } else {
             trade.state = "FAILED";
             trade.failReason = errorMsg;

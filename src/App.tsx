@@ -369,10 +369,11 @@ export default function App() {
           balance: data.balance,
           practiceBalance: data.practiceBalance,
           realBalance: data.realBalance,
+          bonusBalance: data.bonusBalance ?? prev.bonusBalance,
           currency: data.currency || "USD",
           accountMode: data.accountMode,
         }));
-        setGlobalStatusMsg(`Connected to IQ Option (${data.accountMode} Mode)! Practice: $${(data.practiceBalance ?? 10000).toFixed(2)} | Real: $${(data.realBalance ?? 0).toFixed(2)} ${data.currency || "USD"}`);
+        setGlobalStatusMsg(`Connected to IQ Option (${data.accountMode} Mode)! Practice: $${(data.practiceBalance ?? 10000).toFixed(2)} | Real: $${(data.realBalance ?? 0).toFixed(2)}${data.bonusBalance ? ` (+Bonus: $${data.bonusBalance.toFixed(2)})` : ""} ${data.currency || "USD"}`);
         setTimeout(() => setGlobalStatusMsg(""), 5000);
       } else {
         if (data.requires2FA) {
@@ -413,6 +414,7 @@ export default function App() {
           balance: data.activeBalance,
           practiceBalance: data.practiceBalance ?? prev.practiceBalance,
           realBalance: data.realBalance ?? prev.realBalance,
+          bonusBalance: data.bonusBalance ?? prev.bonusBalance,
           currency: data.currency || prev.currency || "USD",
           accountMode: data.accountMode || prev.accountMode,
         }));
