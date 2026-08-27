@@ -27,6 +27,49 @@ import {
   isNotificationSupported
 } from "../utils/notification";
 
+export function getCurrencySymbol(currency?: string): string {
+  if (!currency) return "$";
+  const c = currency.toUpperCase().trim();
+  switch (c) {
+    case "NGN":
+      return "₦";
+    case "USD":
+      return "$";
+    case "EUR":
+      return "€";
+    case "GBP":
+      return "£";
+    case "BRL":
+      return "R$";
+    case "INR":
+      return "₹";
+    case "IDR":
+      return "Rp";
+    case "ZAR":
+      return "R";
+    case "JPY":
+    case "CNY":
+      return "¥";
+    case "CAD":
+    case "AUD":
+    case "NZD":
+    case "SGD":
+      return "$";
+    case "RUB":
+      return "₽";
+    case "TRY":
+      return "₺";
+    default:
+      return c;
+  }
+}
+
+export function formatCurrencyAmount(amount: number, currency?: string): string {
+  const sym = getCurrencySymbol(currency);
+  const code = currency || "USD";
+  return `${sym}${Number(amount || 0).toLocaleString()} ${code}`;
+}
+
 interface SettingsTabProps {
   settings: BotSettings;
   iqConfig: IQOptionConfig;
@@ -1195,538 +1238,753 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
 
-        {/* 3. Risk Management & Martingale Engine (Rules Enforced) */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                <Sliders className="w-4 h-4" />
+        {/* 3. Risk Management & Trade Execution Engine (Rules Enforced) */}
+        {(() => {
+          const activeCurrency = iqConfig.currency || "USD";
+          const currSymbol = getCurrencySymbol(activeCurrency);
+
+          return (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                    <Sliders className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>Trade Management & Capital Risk Engine</span>
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        Active & Enforced
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Multi-Stage Execution Architecture: Precision Scheduled Entry → Checkpoint Early Profit (L1/L2) → Broker Settlement → Managed Recovery (Max L3).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <div className="flex items-center gap-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Base Risk: <strong className="text-white">{currSymbol}{Number(settings.baseStake || 0).toLocaleString()} {activeCurrency}</strong></span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>Risk Management & Martingale Engine</span>
-                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    Rules Enforced
+
+              {/* Architectural Overview Card: Current Trade Management Implementation */}
+              <div className="bg-gradient-to-br from-slate-950 via-slate-900/90 to-slate-950 border border-emerald-500/20 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <h4 className="text-xs font-bold text-slate-200">
+                      Active Trade Management Architecture & Workflow
+                    </h4>
+                  </div>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded-md font-mono font-medium">
+                    Native {activeCurrency} Account Support
                   </span>
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  Strictly enforces: Initial Trade (Level 0) → Level 1 → Level 2 → Level 3 → Hard Stop. No Level 4.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 self-start sm:self-auto bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Base Stake: <strong className="text-white">${settings.baseStake}</strong></span>
-            </div>
-          </div>
-
-          {/* Section A: Initial Trade (Level 0) Configuration */}
-          <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-bold font-mono">
-                  0
                 </div>
-                <h4 className="text-xs font-bold text-white">Initial Trade (Level 0) Parameters & Rules</h4>
-              </div>
-              <span className="text-[10px] text-slate-400 font-mono">Rule 1 & Rule 8</span>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Base Price / Stake */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Default Base Price / Stake ($)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-slate-500 font-mono text-xs">$</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={5000}
-                    value={settings.baseStake}
-                    onChange={(e) => onUpdateSettings({ baseStake: Number(e.target.value) || 100 })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <span className="text-[10px] text-slate-500">Default: $100 per initial signal</span>
-              </div>
-
-              {/* Min Payout */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Minimum Asset Payout Filter (%)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={50}
-                    max={99}
-                    value={settings.minPayout}
-                    onChange={(e) => onUpdateSettings({ minPayout: Number(e.target.value) || 80 })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <span className="text-[10px] text-slate-500">Skip signal if broker payout is below this %</span>
-              </div>
-            </div>
-
-            {/* Level 0 Rule Enforcement Highlights */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
-              <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg space-y-1">
-                <div className="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
-                  <Clock className="w-3 h-3 text-sky-400" />
-                  <span>Scheduled Entry Time</span>
-                </div>
-                <p className="text-[10px] text-slate-400 leading-tight">
-                  Trades at exact signal entry time. Never trades immediately when Telegram message arrives.
-                </p>
-              </div>
-
-              <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg space-y-1">
-                <div className="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  <span>Single Order Guarantee</span>
-                </div>
-                <p className="text-[10px] text-slate-400 leading-tight">
-                  Executes strictly ONE initial trade per signal. Prevents duplicate order placement.
-                </p>
-              </div>
-
-              <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg space-y-1">
-                <div className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
-                  <AlertOctagon className="w-3 h-3 text-emerald-400" />
-                  <span>WIN = STOP Immediately</span>
-                </div>
-                <p className="text-[10px] text-slate-400 leading-tight">
-                  If Level 0 wins, all management stops. No further trades are placed for that signal.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Section B: Global Management Hierarchy & Overrides */}
-          <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 space-y-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-emerald-400" />
-                <h4 className="text-xs font-bold text-white">Management Levels Hierarchy & Rules</h4>
-              </div>
-              <span className="text-[10px] text-emerald-400 font-mono font-bold">Rule 4, 6 & 7</span>
-            </div>
-
-            {/* Visual Progression Map */}
-            <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto">
-              <div className="flex items-center gap-2 text-[11px] font-mono whitespace-nowrap min-w-max">
-                <span className="px-2 py-1 bg-sky-950 border border-sky-800/60 text-sky-300 rounded font-bold">
-                  Level 0 (Signal)
-                </span>
-                <span className="text-slate-500">→</span>
-                <span className="text-emerald-400">WIN: STOP</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-rose-400">LOSS:</span>
-                <span className="px-2 py-1 bg-emerald-950 border border-emerald-800/60 text-emerald-300 rounded font-bold">
-                  Level 1
-                </span>
-                <span className="text-slate-500">→</span>
-                <span className="text-emerald-400">WIN: STOP</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-rose-400">LOSS:</span>
-                <span className="px-2 py-1 bg-amber-950 border border-amber-800/60 text-amber-300 rounded font-bold">
-                  Level 2
-                </span>
-                <span className="text-slate-500">→</span>
-                <span className="text-emerald-400">WIN: STOP</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-rose-400">LOSS:</span>
-                <span className="px-2 py-1 bg-rose-950 border border-rose-800/60 text-rose-300 rounded font-bold">
-                  Level 3
-                </span>
-                <span className="text-slate-500">→</span>
-                <span className="px-2 py-1 bg-slate-800 text-slate-300 rounded font-bold border border-slate-700">
-                  STOP (No Level 4)
-                </span>
-              </div>
-            </div>
-
-            {/* Max Allowed Gale Steps Selector */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-slate-300">
-                  Maximum Management Depth Allowed (Gale Limit)
-                </label>
-                <span className="text-[10px] text-amber-400 font-mono">
-                  {settings.maxGaleSteps === 0 ? "Initial Only (No MG)" : `Up to Level ${settings.maxGaleSteps}`}
-                </span>
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  { level: 0, label: "G0 (Initial Only)", desc: "No MG" },
-                  { level: 1, label: "G1 (Up to L1)", desc: "Max 1 Gale" },
-                  { level: 2, label: "G2 (Up to L2)", desc: "Max 2 Gales" },
-                  { level: 3, label: "G3 (Up to L3)", desc: "Max 3 Gales (Hard Stop)" },
-                ].map(({ level, label, desc }) => (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => onUpdateSettings({ maxGaleSteps: level })}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
-                      settings.maxGaleSteps === level
-                        ? "bg-emerald-600 border-emerald-500 text-white shadow-sm"
-                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    <div>{label}</div>
-                    <div className="text-[9px] font-normal opacity-75 font-mono">{desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Rule 6 & Rule 7 Toggles */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
-              {/* Rule 6: Ignore Telegram Martingale */}
-              <div 
-                onClick={() => onUpdateSettings({ ignoreTelegramMartingale: !(settings.ignoreTelegramMartingale ?? true) })}
-                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
-                  (settings.ignoreTelegramMartingale ?? true)
-                    ? "bg-emerald-500/10 border-emerald-500/40 text-slate-200"
-                    : "bg-slate-900 border-slate-800 text-slate-400"
-                }`}
-              >
-                <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                  (settings.ignoreTelegramMartingale ?? true)
-                    ? "bg-emerald-500 border-emerald-400 text-white"
-                    : "border-slate-700 bg-slate-950"
-                }`}>
-                  {(settings.ignoreTelegramMartingale ?? true) && <Check className="w-3 h-3 stroke-[3]" />}
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <span>Rule 6: Ignore Telegram Signal MG Tags</span>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5 text-[11px] text-slate-300">
+                  {/* Stage 1 */}
+                  <div className="p-3 bg-slate-900/90 border border-slate-800/80 rounded-xl space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-sky-400 font-bold text-xs">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      <span>1. Scheduled Entry</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Executes strictly at the signal entry timestamp in <span className="text-sky-300 font-mono">{settings.timeZone || "Africa/Lagos"}</span>. 1 trade per signal, zero premature market entry, automatic late-tolerance skip.
+                    </p>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
-                    Ignores signal provider's MG1/MG2 tags. The bot's internal Level 1/2/3 rules control all management.
-                  </p>
-                </div>
-              </div>
 
-              {/* Rule 7: Wait for Confirmed Result */}
-              <div 
-                onClick={() => onUpdateSettings({ waitForActualResult: !(settings.waitForActualResult ?? true) })}
-                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
-                  (settings.waitForActualResult ?? true)
-                    ? "bg-emerald-500/10 border-emerald-500/40 text-slate-200"
-                    : "bg-slate-900 border-slate-800 text-slate-400"
-                }`}
-              >
-                <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                  (settings.waitForActualResult ?? true)
-                    ? "bg-emerald-500 border-emerald-400 text-white"
-                    : "border-slate-700 bg-slate-950"
-                }`}>
-                  {(settings.waitForActualResult ?? true) && <Check className="w-3 h-3 stroke-[3]" />}
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <span>Rule 7: Wait for Confirmed IQ Option Result</span>
+                  {/* Stage 2 */}
+                  <div className="p-3 bg-slate-900/90 border border-slate-800/80 rounded-xl space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
+                      <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                      <span>2. L1/L2 Checkpoints</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      At intermediate targets (e.g. +2m, +4m), live spot is evaluated. If in profit (ITM), bot triggers early broker sell to lock in profit early as a WIN. If negative, position continues safely.
+                    </p>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
-                    Waits for official IQ settlement. Only a confirmed LOSS moves to the next level. WIN halts immediately.
-                  </p>
+
+                  {/* Stage 3 */}
+                  <div className="p-3 bg-slate-900/90 border border-slate-800/80 rounded-xl space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-purple-400 font-bold text-xs">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>3. Broker Settlement</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Awaits official IQ Option broker settlement at expiration. WIN ends management immediately. Only verified LOSS proceeds to user-configured recovery levels.
+                    </p>
+                  </div>
+
+                  {/* Stage 4 */}
+                  <div className="p-3 bg-slate-900/90 border border-slate-800/80 rounded-xl space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
+                      <Shield className="w-3.5 h-3.5 shrink-0" />
+                      <span>4. Multi-Currency Sizing</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Directly scales from <strong className="text-white">{currSymbol}1</strong> to <strong className="text-white">{currSymbol}10,000,000 {activeCurrency}</strong> to accommodate currencies like NGN, USD, EUR, INR, BRL without artificial caps.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Section C: Configured Rules for Each Management Level (Level 1, 2, 3 - Rule 5) */}
-          <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 space-y-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-emerald-400" />
-                <h4 className="text-xs font-bold text-white">Rule 5: Detailed Management Level Configurations</h4>
-              </div>
-              <span className="text-[10px] text-slate-400 font-mono">
-                A loss does not auto-trade unless rules match
-              </span>
-            </div>
+              {/* Section A: Initial Trade (Level 0) Configuration */}
+              <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 sm:p-4 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-bold font-mono">
+                      0
+                    </div>
+                    <h4 className="text-xs font-bold text-white">Initial Trade (Level 0) Parameters & Capital Sizing</h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">Rule 1 & Rule 8</span>
+                </div>
 
-            {/* Level Tabs: Level 1 | Level 2 | Level 3 */}
-            <div className="flex border-b border-slate-800 gap-1 pb-1">
-              {(["level1", "level2", "level3"] as const).map((lvlKey, idx) => {
-                const lvlNum = idx + 1;
-                const rule = getLevelRule(lvlKey);
-                const isActive = activeLevelTab === lvlKey;
-                return (
-                  <button
-                    key={lvlKey}
-                    type="button"
-                    onClick={() => setActiveLevelTab(lvlKey)}
-                    className={`flex-1 py-2 px-3 rounded-t-xl text-xs font-bold border-b-2 transition-all flex items-center justify-center gap-2 ${
-                      isActive
-                        ? "bg-slate-900 border-emerald-500 text-white shadow-sm"
-                        : "bg-slate-950/50 border-transparent text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${rule.enabled ? "bg-emerald-400" : "bg-slate-600"}`} />
-                    <span>Level {lvlNum} (MG {lvlNum})</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                      rule.enabled ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-500"
-                    }`}>
-                      {rule.enabled ? "Enabled" : "Disabled"}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Base Price / Stake */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-slate-300">
+                        Default Base Risk / Stake ({activeCurrency})
+                      </label>
+                      <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                        {currSymbol}{Number(settings.baseStake || 0).toLocaleString()} {activeCurrency}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-slate-400 font-mono text-xs font-bold">
+                        {currSymbol}
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10000000}
+                        step={1}
+                        value={settings.baseStake}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          onUpdateSettings({ baseStake: Math.max(1, Math.min(10000000, val || 1)) });
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-20 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                        placeholder="Enter stake amount"
+                      />
+                      <span className="absolute right-3 top-2 text-slate-500 font-mono text-[11px]">
+                        {activeCurrency}
+                      </span>
+                    </div>
+
+                    {/* Quick Stake Preset Chips */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-slate-500 mr-1">Quick Presets:</span>
+                      {[
+                        { label: `${currSymbol}100`, val: 100 },
+                        { label: `${currSymbol}1,000`, val: 1000 },
+                        { label: `${currSymbol}5,000`, val: 5000 },
+                        { label: `${currSymbol}25,000`, val: 25000 },
+                        { label: `${currSymbol}100,000`, val: 100000 },
+                        { label: `${currSymbol}500,000`, val: 500000 },
+                        { label: `${currSymbol}1,000,000`, val: 1000000 },
+                        { label: `${currSymbol}5,000,000`, val: 5000000 },
+                      ].map((preset) => (
+                        <button
+                          key={preset.val}
+                          type="button"
+                          onClick={() => onUpdateSettings({ baseStake: preset.val })}
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-lg border transition-all ${
+                            settings.baseStake === preset.val
+                              ? "bg-emerald-600 border-emerald-500 text-white font-bold"
+                              : "bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <p className="text-[10px] text-slate-500 leading-tight">
+                      Configurable range: <strong className="text-slate-400 font-mono">{currSymbol}1</strong> to <strong className="text-slate-400 font-mono">{currSymbol}10,000,000 {activeCurrency}</strong>. Allows proper risk calibration across standard and high-denomination account currencies.
+                    </p>
+                  </div>
+
+                  {/* Min Payout & Account Currency info */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Minimum Asset Payout Filter (%)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={50}
+                        max={99}
+                        value={settings.minPayout}
+                        onChange={(e) => onUpdateSettings({ minPayout: Number(e.target.value) || 80 })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="absolute right-3 top-2 text-slate-500 font-mono text-xs">% payout</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 block">
+                      Signals on assets with broker payout lower than this threshold will be skipped safely.
                     </span>
-                  </button>
-                );
-              })}
-            </div>
 
-            {/* Active Level Rule Form (Rule 5 Parameters) */}
-            {(() => {
-              const rule = getLevelRule(activeLevelTab);
-              const lvlNum = activeLevelTab === "level1" ? 1 : activeLevelTab === "level2" ? 2 : 3;
-
-              return (
-                <div className="space-y-4 pt-1">
-                  {/* Enable Switch Banner */}
-                  <div className="flex items-center justify-between p-3 bg-slate-900 rounded-xl border border-slate-800">
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-2">
-                        <span>Enable Level {lvlNum} Execution</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
-                          rule.enabled ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-slate-800 text-slate-400"
-                        }`}>
-                          {rule.enabled ? `Evaluated only if Level ${lvlNum - 1} LOSES` : "Level Inactive (Skipped)"}
+                    {/* Account Currency Synchronizer banner */}
+                    <div className="mt-2 p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-3.5 h-3.5 text-sky-400" />
+                        <span className="text-slate-300">Active Account Currency:</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 font-mono text-xs">
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold">
+                          {currSymbol} {activeCurrency}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        {lvlNum === 3
-                          ? "Level 3 is the final management boundary. WIN or LOSS at Level 3 terminates management."
-                          : `If Level ${lvlNum - 1} results in a confirmed LOSS, Level ${lvlNum} will be executed if rules are met.`}
-                      </p>
                     </div>
+                  </div>
+                </div>
 
-                    <button
-                      type="button"
-                      onClick={() => updateLevelRule(activeLevelTab, { enabled: !rule.enabled })}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                        rule.enabled
-                          ? "bg-emerald-600 hover:bg-emerald-500 text-white"
-                          : "bg-slate-800 hover:bg-slate-700 text-slate-400"
-                      }`}
-                    >
-                      {rule.enabled ? "Enabled" : "Disabled"}
-                    </button>
+                {/* Level 0 Rule Enforcement Highlights */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
+                  <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg space-y-1">
+                    <div className="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
+                      <Clock className="w-3 h-3 text-sky-400" />
+                      <span>Scheduled Entry Time</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      Trades at exact signal entry time in active timezone. Never trades immediately when Telegram message arrives.
+                    </p>
                   </div>
 
-                  {/* 5 Parameters Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-                    {/* 1. Stake Sizing Mode & Value */}
-                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
-                      <label className="block text-xs font-semibold text-slate-300">
-                        1. Stake Sizing Rule
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => updateLevelRule(activeLevelTab, { stakeMode: "MULTIPLIER" })}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
-                            rule.stakeMode !== "FIXED"
-                              ? "bg-emerald-600 border-emerald-500 text-white"
-                              : "bg-slate-950 border-slate-800 text-slate-400"
-                          }`}
-                        >
-                          Multiplier
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateLevelRule(activeLevelTab, { stakeMode: "FIXED" })}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
-                            rule.stakeMode === "FIXED"
-                              ? "bg-emerald-600 border-emerald-500 text-white"
-                              : "bg-slate-950 border-slate-800 text-slate-400"
-                          }`}
-                        >
-                          Fixed ($)
-                        </button>
-                      </div>
-
-                      {rule.stakeMode === "FIXED" ? (
-                        <div className="relative">
-                          <span className="absolute left-3 top-2 text-slate-500 font-mono text-xs">$</span>
-                          <input
-                            type="number"
-                            min={1}
-                            value={rule.customStake || (lvlNum === 1 ? 220 : lvlNum === 2 ? 484 : 1064)}
-                            onChange={(e) => updateLevelRule(activeLevelTab, { customStake: Number(e.target.value) })}
-                            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                          />
-                        </div>
-                      ) : (
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="0.1"
-                            min={1.0}
-                            max={5.0}
-                            value={rule.stakeMultiplier || 2.2}
-                            onChange={(e) => updateLevelRule(activeLevelTab, { stakeMultiplier: Number(e.target.value) })}
-                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                          />
-                          <span className="absolute right-3 top-2 text-slate-400 font-mono text-xs">x stake</span>
-                        </div>
-                      )}
+                  <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg space-y-1">
+                    <div className="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      <span>Single Order Guarantee</span>
                     </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      Executes strictly ONE initial trade per signal. Prevents duplicate order placement across messages.
+                    </p>
+                  </div>
 
-                    {/* 2. Trade Direction */}
-                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
-                      <label className="block text-xs font-semibold text-slate-300">
-                        2. Trade Direction
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {[
-                          { val: "SAME", label: "Same (Signal)" },
-                          { val: "REVERSE", label: "Reverse" },
-                          { val: "CALL", label: "Force CALL" },
-                          { val: "PUT", label: "Force PUT" },
-                        ].map((dirOpt) => (
-                          <button
-                            key={dirOpt.val}
-                            type="button"
-                            onClick={() => updateLevelRule(activeLevelTab, { direction: dirOpt.val as any })}
-                            className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all text-center ${
-                              (rule.direction || "SAME") === dirOpt.val
-                                ? "bg-emerald-600 border-emerald-500 text-white"
-                                : "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200"
-                            }`}
-                          >
-                            {dirOpt.label}
-                          </button>
-                        ))}
-                      </div>
+                  <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg space-y-1">
+                    <div className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                      <AlertOctagon className="w-3 h-3 text-emerald-400" />
+                      <span>WIN = STOP Immediately</span>
                     </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      If Level 0 wins (or locks in early profit at L1/L2), all management stops. No further trades are placed.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-                    {/* 3. Timer (Duration) */}
-                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
-                      <label className="block text-xs font-semibold text-slate-300">
-                        3. Timer (Trade Duration)
-                      </label>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {[1, 2, 5].map((mins) => (
-                          <button
-                            key={mins}
-                            type="button"
-                            onClick={() => updateLevelRule(activeLevelTab, { durationMinutes: mins })}
-                            className={`py-1.5 px-2 rounded-lg text-xs font-mono font-bold border transition-all ${
-                              (rule.durationMinutes || 1) === mins
-                                ? "bg-emerald-600 border-emerald-500 text-white"
-                                : "bg-slate-950 border-slate-800 text-slate-400"
-                            }`}
-                          >
-                            {mins} Min
-                          </button>
-                        ))}
-                      </div>
+              {/* Section B: Global Management Hierarchy & Overrides */}
+              <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-emerald-400" />
+                    <h4 className="text-xs font-bold text-white">Management Levels Hierarchy & Rules</h4>
+                  </div>
+                  <span className="text-[10px] text-emerald-400 font-mono font-bold">Rule 4, 6 & 7</span>
+                </div>
+
+                {/* Visual Progression Map */}
+                <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto">
+                  <div className="flex items-center gap-2 text-[11px] font-mono whitespace-nowrap min-w-max">
+                    <span className="px-2 py-1 bg-sky-950 border border-sky-800/60 text-sky-300 rounded font-bold">
+                      Level 0 (Signal)
+                    </span>
+                    <span className="text-slate-500">→</span>
+                    <span className="text-emerald-400">WIN: STOP</span>
+                    <span className="text-slate-600">|</span>
+                    <span className="text-rose-400">LOSS:</span>
+                    <span className="px-2 py-1 bg-emerald-950 border border-emerald-800/60 text-emerald-300 rounded font-bold">
+                      Level 1
+                    </span>
+                    <span className="text-slate-500">→</span>
+                    <span className="text-emerald-400">WIN: STOP</span>
+                    <span className="text-slate-600">|</span>
+                    <span className="text-rose-400">LOSS:</span>
+                    <span className="px-2 py-1 bg-amber-950 border border-amber-800/60 text-amber-300 rounded font-bold">
+                      Level 2
+                    </span>
+                    <span className="text-slate-500">→</span>
+                    <span className="text-emerald-400">WIN: STOP</span>
+                    <span className="text-slate-600">|</span>
+                    <span className="text-rose-400">LOSS:</span>
+                    <span className="px-2 py-1 bg-rose-950 border border-rose-800/60 text-rose-300 rounded font-bold">
+                      Level 3
+                    </span>
+                    <span className="text-slate-500">→</span>
+                    <span className="px-2 py-1 bg-slate-800 text-slate-300 rounded font-bold border border-slate-700">
+                      STOP (No Level 4)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Max Allowed Gale Steps Selector */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-300">
+                      Maximum Management Depth Allowed (Gale Limit)
+                    </label>
+                    <span className="text-[10px] text-amber-400 font-mono">
+                      {settings.maxGaleSteps === 0 ? "Initial Only (No MG)" : `Up to Level ${settings.maxGaleSteps}`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { level: 0, label: "G0 (Initial Only)", desc: "No MG" },
+                      { level: 1, label: "G1 (Up to L1)", desc: "Max 1 Gale" },
+                      { level: 2, label: "G2 (Up to L2)", desc: "Max 2 Gales" },
+                      { level: 3, label: "G3 (Up to L3)", desc: "Max 3 Gales (Hard Stop)" },
+                    ].map(({ level, label, desc }) => (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => onUpdateSettings({ maxGaleSteps: level })}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
+                          settings.maxGaleSteps === level
+                            ? "bg-emerald-600 border-emerald-500 text-white shadow-sm"
+                            : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        <div>{label}</div>
+                        <div className="text-[9px] font-normal opacity-75 font-mono">{desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Rule 6 & Rule 7 Toggles */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                  {/* Rule 6: Ignore Telegram Martingale */}
+                  <div 
+                    onClick={() => onUpdateSettings({ ignoreTelegramMartingale: !(settings.ignoreTelegramMartingale ?? true) })}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
+                      (settings.ignoreTelegramMartingale ?? true)
+                        ? "bg-emerald-500/10 border-emerald-500/40 text-slate-200"
+                        : "bg-slate-900 border-slate-800 text-slate-400"
+                    }`}
+                  >
+                    <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                      (settings.ignoreTelegramMartingale ?? true)
+                        ? "bg-emerald-500 border-emerald-400 text-white"
+                        : "border-slate-700 bg-slate-950"
+                    }`}>
+                      {(settings.ignoreTelegramMartingale ?? true) && <Check className="w-3 h-3 stroke-[3]" />}
                     </div>
-
-                    {/* 4. Entry Delay Offset */}
-                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-1.5">
-                      <label className="block text-xs font-semibold text-slate-300">
-                        4. Entry Timing (Offset)
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min={0}
-                          max={30}
-                          value={rule.entryDelaySeconds || 0}
-                          onChange={(e) => updateLevelRule(activeLevelTab, { entryDelaySeconds: Number(e.target.value) })}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                        />
-                        <span className="absolute right-3 top-2 text-slate-400 font-mono text-xs">sec offset</span>
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>Rule 6: Ignore Telegram Signal MG Tags</span>
                       </div>
-                      <span className="text-[10px] text-slate-500">0 = Exact previous expiration second</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                        Ignores signal provider's MG1/MG2 tags. The bot's internal Level 1/2/3 rules control all management.
+                      </p>
                     </div>
+                  </div>
 
-                    {/* 5. Late Entry Tolerance */}
-                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-1.5 sm:col-span-2">
-                      <label className="block text-xs font-semibold text-rose-300 flex items-center justify-between">
-                        <span>5. Maximum Allowed Delay (Tolerance)</span>
-                        <span className="text-[10px] font-mono text-rose-400">Rule 5 Strict Skip</span>
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min={1000}
-                          max={15000}
-                          step={500}
-                          value={rule.maxAllowedDelayMs || 4000}
-                          onChange={(e) => updateLevelRule(activeLevelTab, { maxAllowedDelayMs: Number(e.target.value) })}
-                          className="w-full bg-slate-950 border border-rose-800/50 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-rose-500"
-                        />
-                        <span className="absolute right-3 top-2 text-slate-400 font-mono text-xs">milliseconds (ms)</span>
+                  {/* Rule 7: Wait for Confirmed Result */}
+                  <div 
+                    onClick={() => onUpdateSettings({ waitForActualResult: !(settings.waitForActualResult ?? true) })}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
+                      (settings.waitForActualResult ?? true)
+                        ? "bg-emerald-500/10 border-emerald-500/40 text-slate-200"
+                        : "bg-slate-900 border-slate-800 text-slate-400"
+                    }`}
+                  >
+                    <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                      (settings.waitForActualResult ?? true)
+                        ? "bg-emerald-500 border-emerald-400 text-white"
+                        : "border-slate-700 bg-slate-950"
+                    }`}>
+                      {(settings.waitForActualResult ?? true) && <Check className="w-3 h-3 stroke-[3]" />}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>Rule 7: Wait for Confirmed IQ Option Result</span>
                       </div>
-                      <p className="text-[10px] text-slate-400 leading-tight">
-                        Never executes late. If entry is delayed beyond {rule.maxAllowedDelayMs || 4000}ms, Level {lvlNum} is <strong>SKIPPED</strong> automatically.
+                      <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                        Waits for official IQ settlement. Only a confirmed LOSS moves to the next level. WIN halts immediately.
                       </p>
                     </div>
                   </div>
                 </div>
-              );
-            })()}
-          </div>
-
-          {/* Section D: Daily Stop Loss and Take Profit Guards */}
-          <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-rose-400" />
-                <h4 className="text-xs font-bold text-white">Daily Account Protection Guards</h4>
               </div>
-              <span className="text-[10px] text-slate-400 font-mono">Daily Auto-Cutoff</span>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* Daily Stop Loss */}
-              <div>
-                <label className="block text-xs font-semibold text-rose-300 mb-1.5 flex items-center gap-1">
-                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Daily Stop-Loss ($)</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-slate-500 font-mono text-xs">$</span>
-                  <input
-                    type="number"
-                    min={5}
-                    value={settings.dailyStopLoss}
-                    onChange={(e) => onUpdateSettings({ dailyStopLoss: Number(e.target.value) || 500 })}
-                    className="w-full bg-slate-900 border border-rose-800/40 rounded-xl pl-7 pr-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-rose-500"
-                  />
+              {/* Section C: Configured Rules for Each Management Level (Level 1, 2, 3 - Rule 5) */}
+              <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-emerald-400" />
+                    <h4 className="text-xs font-bold text-white">Rule 5: Detailed Management Level Configurations</h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    A loss does not auto-trade unless rules match
+                  </span>
                 </div>
-                <span className="text-[10px] text-slate-500">Halts all trading if daily net loss reaches this amount</span>
+
+                {/* Level Tabs: Level 1 | Level 2 | Level 3 */}
+                <div className="flex border-b border-slate-800 gap-1 pb-1">
+                  {(["level1", "level2", "level3"] as const).map((lvlKey, idx) => {
+                    const lvlNum = idx + 1;
+                    const rule = getLevelRule(lvlKey);
+                    const isActive = activeLevelTab === lvlKey;
+                    return (
+                      <button
+                        key={lvlKey}
+                        type="button"
+                        onClick={() => setActiveLevelTab(lvlKey)}
+                        className={`flex-1 py-2 px-3 rounded-t-xl text-xs font-bold border-b-2 transition-all flex items-center justify-center gap-2 ${
+                          isActive
+                            ? "bg-slate-900 border-emerald-500 text-white shadow-sm"
+                            : "bg-slate-950/50 border-transparent text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${rule.enabled ? "bg-emerald-400" : "bg-slate-600"}`} />
+                        <span>Level {lvlNum} (MG {lvlNum})</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                          rule.enabled ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-500"
+                        }`}>
+                          {rule.enabled ? "Enabled" : "Disabled"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Active Level Rule Form (Rule 5 Parameters) */}
+                {(() => {
+                  const rule = getLevelRule(activeLevelTab);
+                  const lvlNum = activeLevelTab === "level1" ? 1 : activeLevelTab === "level2" ? 2 : 3;
+
+                  return (
+                    <div className="space-y-4 pt-1">
+                      {/* Enable Switch Banner */}
+                      <div className="flex items-center justify-between p-3 bg-slate-900 rounded-xl border border-slate-800">
+                        <div>
+                          <div className="text-xs font-bold text-white flex items-center gap-2">
+                            <span>Enable Level {lvlNum} Execution</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
+                              rule.enabled ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-slate-800 text-slate-400"
+                            }`}>
+                              {rule.enabled ? `Evaluated only if Level ${lvlNum - 1} LOSES` : "Level Inactive (Skipped)"}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {lvlNum === 3
+                              ? "Level 3 is the final management boundary. WIN or LOSS at Level 3 terminates management."
+                              : `If Level ${lvlNum - 1} results in a confirmed LOSS, Level ${lvlNum} will be executed if rules are met.`}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => updateLevelRule(activeLevelTab, { enabled: !rule.enabled })}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                            rule.enabled
+                              ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                              : "bg-slate-800 hover:bg-slate-700 text-slate-400"
+                          }`}
+                        >
+                          {rule.enabled ? "Enabled" : "Disabled"}
+                        </button>
+                      </div>
+
+                      {/* 5 Parameters Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+                        {/* 1. Stake Sizing Mode & Value */}
+                        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                          <label className="block text-xs font-semibold text-slate-300">
+                            1. Stake Sizing Rule ({activeCurrency})
+                          </label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => updateLevelRule(activeLevelTab, { stakeMode: "MULTIPLIER" })}
+                              className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
+                                rule.stakeMode !== "FIXED"
+                                  ? "bg-emerald-600 border-emerald-500 text-white"
+                                  : "bg-slate-950 border-slate-800 text-slate-400"
+                              }`}
+                            >
+                              Multiplier
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateLevelRule(activeLevelTab, { stakeMode: "FIXED" })}
+                              className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
+                                rule.stakeMode === "FIXED"
+                                  ? "bg-emerald-600 border-emerald-500 text-white"
+                                  : "bg-slate-950 border-slate-800 text-slate-400"
+                              }`}
+                            >
+                              Fixed ({currSymbol})
+                            </button>
+                          </div>
+
+                          {rule.stakeMode === "FIXED" ? (
+                            <div className="relative">
+                              <span className="absolute left-3 top-2 text-slate-400 font-mono text-xs font-bold">
+                                {currSymbol}
+                              </span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={10000000}
+                                value={rule.customStake || (lvlNum === 1 ? 220 : lvlNum === 2 ? 484 : 1064)}
+                                onChange={(e) => updateLevelRule(activeLevelTab, { customStake: Number(e.target.value) })}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                              />
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min={1.0}
+                                max={5.0}
+                                value={rule.stakeMultiplier || 2.2}
+                                onChange={(e) => updateLevelRule(activeLevelTab, { stakeMultiplier: Number(e.target.value) })}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                              />
+                              <span className="absolute right-3 top-2 text-slate-400 font-mono text-xs">x stake</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 2. Trade Direction */}
+                        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                          <label className="block text-xs font-semibold text-slate-300">
+                            2. Trade Direction
+                          </label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {[
+                              { val: "SAME", label: "Same (Signal)" },
+                              { val: "REVERSE", label: "Reverse" },
+                              { val: "CALL", label: "Force CALL" },
+                              { val: "PUT", label: "Force PUT" },
+                            ].map((dirOpt) => (
+                              <button
+                                key={dirOpt.val}
+                                type="button"
+                                onClick={() => updateLevelRule(activeLevelTab, { direction: dirOpt.val as any })}
+                                className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all text-center ${
+                                  (rule.direction || "SAME") === dirOpt.val
+                                    ? "bg-emerald-600 border-emerald-500 text-white"
+                                    : "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200"
+                                }`}
+                              >
+                                {dirOpt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 3. Timer (Duration) */}
+                        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                          <label className="block text-xs font-semibold text-slate-300">
+                            3. Timer (Trade Duration)
+                          </label>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {[1, 2, 5].map((mins) => (
+                              <button
+                                key={mins}
+                                type="button"
+                                onClick={() => updateLevelRule(activeLevelTab, { durationMinutes: mins })}
+                                className={`py-1.5 px-2 rounded-lg text-xs font-mono font-bold border transition-all ${
+                                  (rule.durationMinutes || 1) === mins
+                                    ? "bg-emerald-600 border-emerald-500 text-white"
+                                    : "bg-slate-950 border-slate-800 text-slate-400"
+                                }`}
+                              >
+                                {mins} Min
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 4. Entry Delay Offset */}
+                        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-1.5">
+                          <label className="block text-xs font-semibold text-slate-300">
+                            4. Entry Timing (Offset)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min={0}
+                              max={30}
+                              value={rule.entryDelaySeconds || 0}
+                              onChange={(e) => updateLevelRule(activeLevelTab, { entryDelaySeconds: Number(e.target.value) })}
+                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                            />
+                            <span className="absolute right-3 top-2 text-slate-400 font-mono text-xs">sec offset</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500">0 = Exact previous expiration second</span>
+                        </div>
+
+                        {/* 5. Late Entry Tolerance */}
+                        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-1.5 sm:col-span-2">
+                          <label className="block text-xs font-semibold text-rose-300 flex items-center justify-between">
+                            <span>5. Maximum Allowed Delay (Tolerance)</span>
+                            <span className="text-[10px] font-mono text-rose-400">Rule 5 Strict Skip</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min={1000}
+                              max={15000}
+                              step={500}
+                              value={rule.maxAllowedDelayMs || 4000}
+                              onChange={(e) => updateLevelRule(activeLevelTab, { maxAllowedDelayMs: Number(e.target.value) })}
+                              className="w-full bg-slate-950 border border-rose-800/50 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-rose-500"
+                            />
+                            <span className="absolute right-3 top-2 text-slate-400 font-mono text-xs">milliseconds (ms)</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-tight">
+                            Never executes late. If entry is delayed beyond {rule.maxAllowedDelayMs || 4000}ms, Level {lvlNum} is <strong>SKIPPED</strong> automatically.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
-              {/* Daily Take Profit */}
-              <div>
-                <label className="block text-xs font-semibold text-emerald-300 mb-1.5 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Daily Take-Profit ($)</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-slate-500 font-mono text-xs">$</span>
-                  <input
-                    type="number"
-                    min={5}
-                    value={settings.dailyTakeProfit}
-                    onChange={(e) => onUpdateSettings({ dailyTakeProfit: Number(e.target.value) || 1000 })}
-                    className="w-full bg-slate-900 border border-emerald-800/40 rounded-xl pl-7 pr-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
+              {/* Section D: Daily Stop Loss and Take Profit Guards (Currency-Aware) */}
+              <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 sm:p-4 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-400" />
+                    <h4 className="text-xs font-bold text-white">
+                      Daily Account Protection Guards ({activeCurrency})
+                    </h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">Daily Auto-Cutoff</span>
                 </div>
-                <span className="text-[10px] text-slate-500">Locks in profits and stops trading when target is hit</span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Daily Stop Loss */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-rose-300 flex items-center gap-1">
+                        <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Daily Stop-Loss ({activeCurrency})</span>
+                      </label>
+                      <span className="text-[11px] font-mono text-rose-400 font-bold">
+                        {currSymbol}{Number(settings.dailyStopLoss || 0).toLocaleString()} {activeCurrency}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-slate-400 font-mono text-xs font-bold">
+                        {currSymbol}
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100000000}
+                        value={settings.dailyStopLoss}
+                        onChange={(e) => onUpdateSettings({ dailyStopLoss: Number(e.target.value) || 500 })}
+                        className="w-full bg-slate-900 border border-rose-800/40 rounded-xl pl-9 pr-16 py-2 text-xs font-mono text-white focus:outline-none focus:border-rose-500"
+                      />
+                      <span className="absolute right-3 top-2 text-slate-500 font-mono text-[11px]">
+                        {activeCurrency}
+                      </span>
+                    </div>
+
+                    {/* Quick Stop Loss Presets */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] text-slate-500 mr-1">Presets:</span>
+                      {[
+                        { label: `${currSymbol}500`, val: 500 },
+                        { label: `${currSymbol}5,000`, val: 5000 },
+                        { label: `${currSymbol}50,000`, val: 50000 },
+                        { label: `${currSymbol}250,000`, val: 250000 },
+                        { label: `${currSymbol}1,000,000`, val: 1000000 },
+                        { label: `${currSymbol}5,000,000`, val: 5000000 },
+                      ].map((p) => (
+                        <button
+                          key={p.val}
+                          type="button"
+                          onClick={() => onUpdateSettings({ dailyStopLoss: p.val })}
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-lg border transition-all ${
+                            settings.dailyStopLoss === p.val
+                              ? "bg-rose-600/80 border-rose-500 text-white font-bold"
+                              : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-slate-500 block">
+                      Halts all automated trading if cumulative daily net loss reaches this threshold.
+                    </span>
+                  </div>
+
+                  {/* Daily Take Profit */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-emerald-300 flex items-center gap-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Daily Take-Profit ({activeCurrency})</span>
+                      </label>
+                      <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                        {currSymbol}{Number(settings.dailyTakeProfit || 0).toLocaleString()} {activeCurrency}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-slate-400 font-mono text-xs font-bold">
+                        {currSymbol}
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100000000}
+                        value={settings.dailyTakeProfit}
+                        onChange={(e) => onUpdateSettings({ dailyTakeProfit: Number(e.target.value) || 1000 })}
+                        className="w-full bg-slate-900 border border-emerald-800/40 rounded-xl pl-9 pr-16 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="absolute right-3 top-2 text-slate-500 font-mono text-[11px]">
+                        {activeCurrency}
+                      </span>
+                    </div>
+
+                    {/* Quick Take Profit Presets */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] text-slate-500 mr-1">Presets:</span>
+                      {[
+                        { label: `${currSymbol}1,000`, val: 1000 },
+                        { label: `${currSymbol}10,000`, val: 10000 },
+                        { label: `${currSymbol}100,000`, val: 100000 },
+                        { label: `${currSymbol}500,000`, val: 500000 },
+                        { label: `${currSymbol}2,000,000`, val: 2000000 },
+                        { label: `${currSymbol}10,000,000`, val: 10000000 },
+                      ].map((p) => (
+                        <button
+                          key={p.val}
+                          type="button"
+                          onClick={() => onUpdateSettings({ dailyTakeProfit: p.val })}
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-lg border transition-all ${
+                            settings.dailyTakeProfit === p.val
+                              ? "bg-emerald-600/80 border-emerald-500 text-white font-bold"
+                              : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-slate-500 block">
+                      Locks in daily profits and pauses further automated executions once target is hit.
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* 4. Native App (PWA), Screen Keep-Awake & Audio Alert Center */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
