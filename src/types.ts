@@ -82,7 +82,8 @@ export interface BotSettings {
   baseStake: number;
   minPayout: number;
   martingaleMultiplier: number;
-  maxGaleSteps: number; // 0 (Level 0 only), 1 (Up to L1), 2 (Up to L2), 3 (Up to L3)
+  maxGaleSteps: number; // 1 (Level 1 Entry Only), 2 (Up to Level 2 Checkpoint), 3 (Up to Level 3 Full Close)
+  checkpointLeadSeconds?: number; // Pre-close precision lead time in seconds before checkpoint minute (default 3s)
   dailyStopLoss: number;
   dailyTakeProfit: number;
   timeZone?: string; // Unified Project & Broker Timezone (e.g. Africa/Lagos, America/Sao_Paulo, Europe/London, UTC+1, etc.)
@@ -123,7 +124,7 @@ export interface TradeRecord {
   id: string;
   signalId: string;
   parentTradeId?: string;
-  managementLevel: number; // 0 for initial trade, 1 for Level 1, 2 for Level 2, 3 for Level 3
+  managementLevel: number; // 1 for Level 1 (Signal Entry), 2 for Level 2, 3 for Level 3
   deterministicKey: string;
   sourceChannel: string;
   rawSignalText: string;

@@ -1445,7 +1445,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Level 0 Rule Enforcement Highlights */}
+                {/* Level 1 Rule Enforcement Highlights */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
                   <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg space-y-1">
                     <div className="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
@@ -1473,7 +1473,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                       <span>WIN = STOP Immediately</span>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-tight">
-                      If Level 0 wins (or locks in early profit at L1/L2), all management stops. No further trades are placed.
+                      If Level 1 wins (or locks in early profit at Level 1 / Level 2 checkpoint), all management stops. No further trades are placed.
                     </p>
                   </div>
                 </div>
@@ -1493,32 +1493,25 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto">
                   <div className="flex items-center gap-2 text-[11px] font-mono whitespace-nowrap min-w-max">
                     <span className="px-2 py-1 bg-sky-950 border border-sky-800/60 text-sky-300 rounded font-bold">
-                      Level 0 (Signal)
+                      Level 1 (Signal Entry)
                     </span>
                     <span className="text-slate-500">→</span>
                     <span className="text-emerald-400">WIN: STOP</span>
                     <span className="text-slate-600">|</span>
-                    <span className="text-rose-400">LOSS:</span>
-                    <span className="px-2 py-1 bg-emerald-950 border border-emerald-800/60 text-emerald-300 rounded font-bold">
-                      Level 1
-                    </span>
-                    <span className="text-slate-500">→</span>
-                    <span className="text-emerald-400">WIN: STOP</span>
-                    <span className="text-slate-600">|</span>
-                    <span className="text-rose-400">LOSS:</span>
+                    <span className="text-rose-400">IN-LOSS:</span>
                     <span className="px-2 py-1 bg-amber-950 border border-amber-800/60 text-amber-300 rounded font-bold">
-                      Level 2
+                      Level 2 (Checkpoint 2)
                     </span>
                     <span className="text-slate-500">→</span>
                     <span className="text-emerald-400">WIN: STOP</span>
                     <span className="text-slate-600">|</span>
-                    <span className="text-rose-400">LOSS:</span>
+                    <span className="text-rose-400">IN-LOSS:</span>
                     <span className="px-2 py-1 bg-rose-950 border border-rose-800/60 text-rose-300 rounded font-bold">
-                      Level 3
+                      Level 3 (Full Expiry Close)
                     </span>
                     <span className="text-slate-500">→</span>
                     <span className="px-2 py-1 bg-slate-800 text-slate-300 rounded font-bold border border-slate-700">
-                      STOP (No Level 4)
+                      STOP (Management Complete)
                     </span>
                   </div>
                 </div>
@@ -1527,31 +1520,71 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-semibold text-slate-300">
-                      Maximum Management Depth Allowed (Gale Limit)
+                      Maximum Management Depth Allowed (Management Limit)
                     </label>
                     <span className="text-[10px] text-amber-400 font-mono">
-                      {settings.maxGaleSteps === 0 ? "Initial Only (No MG)" : `Up to Level ${settings.maxGaleSteps}`}
+                      {settings.maxGaleSteps <= 1 ? "Level 1 Entry Only" : settings.maxGaleSteps === 2 ? "Up to Level 2 Checkpoint" : "Up to Level 3 Full Close"}
                     </span>
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {[
-                      { level: 0, label: "G0 (Initial Only)", desc: "No MG" },
-                      { level: 1, label: "G1 (Up to L1)", desc: "Max 1 Gale" },
-                      { level: 2, label: "G2 (Up to L2)", desc: "Max 2 Gales" },
-                      { level: 3, label: "G3 (Up to L3)", desc: "Max 3 Gales (Hard Stop)" },
+                      { level: 1, label: "Level 1 (Entry Only)", desc: "Direct Single Trade" },
+                      { level: 2, label: "Level 2 (Up to L2)", desc: "Up to Checkpoint 2" },
+                      { level: 3, label: "Level 3 (Up to L3)", desc: "Up to Full Close (Hard Stop)" },
                     ].map(({ level, label, desc }) => (
                       <button
                         key={level}
                         type="button"
                         onClick={() => onUpdateSettings({ maxGaleSteps: level })}
                         className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
-                          settings.maxGaleSteps === level
+                          settings.maxGaleSteps === level || (level === 1 && (settings.maxGaleSteps === 0 || !settings.maxGaleSteps))
                             ? "bg-emerald-600 border-emerald-500 text-white shadow-sm"
                             : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
                         }`}
                       >
                         <div>{label}</div>
                         <div className="text-[9px] font-normal opacity-75 font-mono">{desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Precision Checkpoint Lead Time (Pre-Close 3 Seconds Before Minute) */}
+                <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Precision Early Close Lead Time (Pre-Minute Close)</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Triggers spot evaluation and transmits early sell command before the minute checkpoint, sealing profit before the candle closes.
+                      </p>
+                    </div>
+                    <span className="px-2 py-0.5 bg-sky-950 border border-sky-800 text-sky-300 text-[11px] font-mono font-bold rounded">
+                      T-{settings.checkpointLeadSeconds ?? 3}s
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 pt-1">
+                    {[
+                      { sec: 2, label: "T - 2s", desc: "Fast" },
+                      { sec: 3, label: "T - 3s (Optimal)", desc: "Recommended" },
+                      { sec: 4, label: "T - 4s", desc: "High Buffer" },
+                      { sec: 5, label: "T - 5s", desc: "Ultra Safe" },
+                    ].map(({ sec, label, desc }) => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => onUpdateSettings({ checkpointLeadSeconds: sec })}
+                        className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all text-center ${
+                          (settings.checkpointLeadSeconds ?? 3) === sec
+                            ? "bg-sky-600 border-sky-500 text-white shadow-sm"
+                            : "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        <div>{label}</div>
+                        <div className="text-[9px] font-normal opacity-75">{desc}</div>
                       </button>
                     ))}
                   </div>

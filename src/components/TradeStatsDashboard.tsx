@@ -79,9 +79,13 @@ export const TradeStatsDashboard: React.FC<TradeStatsDashboardProps> = ({
     const netProfit = totalProfit - totalLoss;
     const profitFactor = totalLoss > 0 ? totalProfit / totalLoss : totalProfit > 0 ? 99.9 : 0;
 
-    // Martingale Level Breakdown
-    const levelStats = [0, 1, 2, 3].map((lvl) => {
-      const lvlSettled = settledTrades.filter((t) => (t.managementLevel ?? 0) === lvl);
+    // Martingale / Management Level Breakdown (Level 1, Level 2, Level 3)
+    const levelStats = [1, 2, 3].map((lvl) => {
+      const lvlSettled = settledTrades.filter((t) => {
+        const tLvl = t.managementLevel ?? 1;
+        if (lvl === 1) return tLvl <= 1;
+        return tLvl === lvl;
+      });
       const lvlWins = lvlSettled.filter((t) => t.state === "WIN" || t.outcome === "WIN").length;
       const lvlLosses = lvlSettled.filter((t) => t.state === "LOSS" || t.outcome === "LOSS").length;
       const lvlDecisive = lvlWins + lvlLosses;
@@ -98,7 +102,7 @@ export const TradeStatsDashboard: React.FC<TradeStatsDashboardProps> = ({
 
       return {
         level: lvl,
-        label: lvl === 0 ? "Level 0 (Direct Signal)" : `Level ${lvl} (Martingale)`,
+        label: lvl === 1 ? "Level 1 (Signal Entry)" : lvl === 2 ? "Level 2 (Checkpoint 2)" : "Level 3 (Full Close)",
         total: lvlSettled.length,
         wins: lvlWins,
         losses: lvlLosses,

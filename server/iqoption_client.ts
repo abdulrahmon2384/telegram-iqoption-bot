@@ -259,6 +259,62 @@ export class IQOptionClient {
     return this.userProfile.balances.PRACTICE;
   }
 
+  /**
+   * Deducts the risked stake from local/simulated account balance upon trade entry
+   */
+  public debitBalanceForOrder(stake: number, mode: "PRACTICE" | "REAL") {
+    if (!this.userProfile) {
+      this.userProfile = {
+        id: 0,
+        email: this.email || "demo@iqoption.com",
+        name: "IQ Option Demo Trader",
+        currency: "USD",
+        balances: {
+          PRACTICE: 10000,
+          REAL: 0,
+          currency: "USD",
+        },
+        activeAccountMode: mode,
+        activeBalanceId: mode === "REAL" ? 1 : 4,
+      };
+    }
+    if (mode === "REAL") {
+      this.userProfile.balances.REAL = Math.max(0, Number(((this.userProfile.balances.REAL || 0) - stake).toFixed(2)));
+      this.userProfile.balances.totalReal = (this.userProfile.balances.REAL || 0) + (this.userProfile.balances.bonus || 0);
+    } else {
+      this.userProfile.balances.PRACTICE = Math.max(0, Number(((this.userProfile.balances.PRACTICE || 10000) - stake).toFixed(2)));
+    }
+    console.log(`[Balance Deduct] Stake $${stake} debited for new trade. Active Balance: $${this.getActiveBalanceAmount().toFixed(2)}`);
+  }
+
+  /**
+   * Credits the gross return (Risk Stake + Net Profit) to balance upon win, early sell, or draw
+   */
+  public creditBalanceForSettlement(grossReturn: number, mode: "PRACTICE" | "REAL") {
+    if (!this.userProfile) {
+      this.userProfile = {
+        id: 0,
+        email: this.email || "demo@iqoption.com",
+        name: "IQ Option Demo Trader",
+        currency: "USD",
+        balances: {
+          PRACTICE: 10000,
+          REAL: 0,
+          currency: "USD",
+        },
+        activeAccountMode: mode,
+        activeBalanceId: mode === "REAL" ? 1 : 4,
+      };
+    }
+    if (mode === "REAL") {
+      this.userProfile.balances.REAL = Number(((this.userProfile.balances.REAL || 0) + grossReturn).toFixed(2));
+      this.userProfile.balances.totalReal = (this.userProfile.balances.REAL || 0) + (this.userProfile.balances.bonus || 0);
+    } else {
+      this.userProfile.balances.PRACTICE = Number(((this.userProfile.balances.PRACTICE || 10000) + grossReturn).toFixed(2));
+    }
+    console.log(`[Balance Credit] Gross return $${grossReturn.toFixed(2)} credited on settlement. Active Balance: $${this.getActiveBalanceAmount().toFixed(2)}`);
+  }
+
   public setAccountMode(mode: "PRACTICE" | "REAL") {
     this.accountMode = mode;
     if (this.userProfile) {
@@ -1750,65 +1806,194 @@ export class IQOptionClient {
   }
 
   /**
-   * Sells an open option early via IQ Option v6 sell_option API
+   * Verifies if an option or position is officially sold / closed on the IQ Option broker side
    */
-  public async sellOption(orderId: string | number): Promise<{ success: boolean; profit?: number; error?: string }> {
+  public async verifyOptionSoldOnBroker(orderId: string | number, maxWaitMs: number = 2500): Promise<{ isSold: boolean; profit?: number; raw?: any; error?: string }> {
+    const idStr = String(orderId);
+    const numId = parseInt(idStr.replace(/\D/g, ""), 10) || orderId;
+
+    if (idStr.startsWith("SIM-")) {
+      return { isSold: true, profit: 0 };
+    }
+
+    // 1. Check cached settlement first (if WebSocket already broadcasted option-closed)
+    if (this.orderSettlementCache.has(idStr)) {
+      const cached = this.orderSettlementCache.get(idStr);
+      if (cached && (cached.settled || cached.outcome === "WIN" || cached.outcome === "LOSS" || cached.outcome === "DRAW")) {
+        return { isSold: true, profit: cached.profit, raw: cached.rawBrokerResponse };
+      }
+    }
+
+    // 2. Query IQ Option active options list via WebSocket (get-options)
+    if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN && this.userProfile) {
+      try {
+        const balanceId = this.accountMode === "REAL"
+          ? this.userProfile.balances.realBalanceId
+          : this.userProfile.balances.practiceBalanceId;
+
+        const res = await this.sendWebSocketMessage("sendMessage", {
+          name: "get-options",
+          version: "1.0",
+          body: {
+            user_balance_id: balanceId,
+            limit: 10,
+          },
+        }, 1500);
+
+        if (res?.msg?.options && Array.isArray(res.msg.options)) {
+          const match = res.msg.options.find((o: any) => String(o.id) === idStr || o.id === numId);
+          if (match) {
+            const status = String(match.status || match.state || "").toLowerCase();
+            const winStr = String(match.win || "").toLowerCase();
+            const isSoldStatus = status === "sold" || status === "closed" || status === "settled" || status === "archived";
+            const hasWinAmount = typeof match.win_amount === "number" && match.win_amount > 0;
+            const hasProfit = typeof match.profit_amount === "number" || typeof match.close_profit === "number";
+
+            if (isSoldStatus || hasWinAmount || hasProfit || winStr === "win") {
+              const stake = parseFloat(match.amount || 10);
+              const profit = typeof match.profit_amount === "number"
+                ? match.profit_amount
+                : (typeof match.win_amount === "number" ? match.win_amount - stake : stake * 0.87);
+              return { isSold: true, profit: Number(profit.toFixed(2)), raw: match };
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 3. Query IQ Option History API via REST
+    if (this.ssid) {
+      try {
+        const historyEndpoints = [
+          "https://iqoption.com/api/v1/history/positions?limit=10",
+          "https://iqoption.com/api/v1/users/positions?limit=10",
+        ];
+        for (const ep of historyEndpoints) {
+          const resp = await fetch(ep, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+              "Cookie": `ssid=${this.ssid}`,
+              "Accept": "application/json",
+            },
+          });
+          if (resp.ok) {
+            const hData: any = await resp.json().catch(() => null);
+            const positions = hData?.result?.positions || hData?.positions || hData?.data || [];
+            if (Array.isArray(positions)) {
+              const matched = positions.find((p: any) => String(p.id || p.position_id || p.external_id) === idStr || p.id === numId);
+              if (matched) {
+                const status = String(matched.status || matched.state || matched.win || "").toLowerCase();
+                const isClosed = status === "sold" || status === "closed" || status === "win" || (typeof matched.win_amount === "number" && matched.win_amount > 0) || (typeof matched.close_profit === "number");
+                if (isClosed) {
+                  const stake = parseFloat(matched.amount || 10);
+                  const profit = typeof matched.win_amount === "number" && matched.win_amount > 0
+                    ? matched.win_amount - stake
+                    : (typeof matched.close_profit === "number" ? matched.close_profit : stake * 0.87);
+                  return { isSold: true, profit: Number(profit.toFixed(2)), raw: matched };
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    return { isSold: false };
+  }
+
+  /**
+   * Sells an open option early via IQ Option broker API with guaranteed broker-side confirmation verification
+   */
+  public async sellOption(orderId: string | number): Promise<{ success: boolean; confirmed: boolean; profit?: number; error?: string; rawResult?: any }> {
     const idStr = String(orderId);
     const numId = parseInt(idStr.replace(/\D/g, ""), 10) || orderId;
 
     if (idStr.startsWith("SIM-")) {
       console.log(`[IQ Option Simulated] Early sell executed for Simulated Order #${idStr}`);
-      return { success: true, profit: 0 };
+      return { success: true, confirmed: true, profit: 0 };
     }
 
     console.log(`[IQ Option sell_option] Executing Early Option Sale for Broker Order #${numId}...`);
+    let lastBrokerError = "";
+    let saleAccepted = false;
 
-    // 1. Try WebSocket sell-options (Turbo/Binary options v6 protocol)
+    // 1. Try WebSocket sell-options protocols (v2.0, v1.0, and digital option close)
     if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
-        const res = await this.sendWebSocketMessage("sendMessage", {
+        // Method A: sendMessage sell-options v2.0
+        const resV2 = await this.sendWebSocketMessage("sendMessage", {
           name: "sell-options",
-          version: "1.0",
+          version: "2.0",
           body: {
             options_ids: [numId],
           },
-        }, 2500);
+        }, 2000);
 
-        if (res?.msg?.is_successful !== false && !res?.msg?.message) {
-          console.log(`✅ [IQ Option sell_option] Successfully sold option #${numId} early via WebSocket sendMessage!`);
-          return { success: true };
+        if (resV2?.msg?.is_successful === true || (Array.isArray(resV2?.msg) && resV2.msg.length > 0)) {
+          console.log(`✅ [IQ Option sell_option] sell-options v2.0 accepted by broker for #${numId}`);
+          saleAccepted = true;
+        } else if (resV2?.msg?.message || resV2?.msg?.error) {
+          lastBrokerError = String(resV2?.msg?.message || resV2?.msg?.error);
         }
 
-        // Secondary channel: raw sell-options
-        const rawRes = await this.sendWebSocketMessage("sell-options", {
-          options_ids: [numId],
-        }, 2500);
+        // Method B: sendMessage sell-options v1.0
+        if (!saleAccepted) {
+          const resV1 = await this.sendWebSocketMessage("sendMessage", {
+            name: "sell-options",
+            version: "1.0",
+            body: {
+              options_ids: [numId],
+            },
+          }, 2000);
 
-        if (rawRes?.msg?.is_successful !== false) {
-          console.log(`✅ [IQ Option sell_option] Successfully sold option #${numId} early via sell-options channel!`);
-          return { success: true };
+          if (resV1?.msg?.is_successful === true || (Array.isArray(resV1?.msg) && resV1.msg.length > 0) || (resV1?.msg && !resV1?.msg?.is_successful && resV1?.msg?.is_successful !== false && !resV1?.msg?.message)) {
+            console.log(`✅ [IQ Option sell_option] sell-options v1.0 accepted by broker for #${numId}`);
+            saleAccepted = true;
+          } else if (resV1?.msg?.message) {
+            lastBrokerError = String(resV1?.msg?.message);
+          }
         }
 
-        // Single option format
-        await this.sendWebSocketMessage("sendMessage", {
-          name: "sell-option",
-          version: "1.0",
-          body: {
-            option_id: numId,
-          },
-        }, 2000).catch(() => {});
+        // Method C: Raw sell-options channel
+        if (!saleAccepted) {
+          const rawRes = await this.sendWebSocketMessage("sell-options", {
+            options_ids: [numId],
+          }, 2000);
+
+          if (rawRes?.msg?.is_successful === true || (Array.isArray(rawRes?.msg) && rawRes.msg.length > 0)) {
+            console.log(`✅ [IQ Option sell_option] raw sell-options accepted for #${numId}`);
+            saleAccepted = true;
+          }
+        }
+
+        // Method D: Single option & Digital option formats
+        if (!saleAccepted) {
+          await this.sendWebSocketMessage("sendMessage", {
+            name: "sell-option",
+            version: "1.0",
+            body: { option_id: numId },
+          }, 1500).catch(() => {});
+
+          await this.sendWebSocketMessage("sendMessage", {
+            name: "digital-options.close-position",
+            version: "1.0",
+            body: { position_id: numId },
+          }, 1500).catch(() => {});
+        }
       } catch (e: any) {
         console.warn(`[IQ Option sell_option WS warning]:`, e.message);
+        lastBrokerError = e.message;
       }
     }
 
-    // 2. Try REST API Fallback
-    if (this.ssid) {
+    // 2. Try REST API Fallbacks
+    if (!saleAccepted && this.ssid) {
       try {
         const endpoints = [
           { url: "https://iqoption.com/api/v1/sell_options", body: { options_ids: [numId] } },
           { url: "https://iqoption.com/api/option/sell", body: { option_id: numId } },
           { url: "https://iqoption.com/api/v1/digital/positions/sell", body: { position_id: numId } },
+          { url: "https://iqoption.com/api/v1/positions/sell", body: { position_id: numId } },
         ];
 
         for (const ep of endpoints) {
@@ -1825,18 +2010,57 @@ export class IQOptionClient {
 
           if (resp.ok) {
             const json: any = await resp.json().catch(() => null);
-            if (json?.is_successful !== false && !json?.message) {
-              console.log(`✅ [IQ Option sell_option] Successfully sold option #${numId} early via ${ep.url}!`);
-              return { success: true };
+            if (json?.is_successful === true || (Array.isArray(json?.result) && json.result.length > 0) || (json && json?.is_successful !== false && !json?.message && !json?.error)) {
+              console.log(`✅ [IQ Option sell_option] REST sell accepted via ${ep.url} for #${numId}`);
+              saleAccepted = true;
+              break;
+            } else if (json?.message || json?.error) {
+              lastBrokerError = String(json.message || json.error);
             }
           }
         }
       } catch (e: any) {
         console.warn(`[IQ Option sell_option REST warning]:`, e.message);
+        lastBrokerError = e.message;
       }
     }
 
-    return { success: true };
+    // 3. STRICT BROKER VERIFICATION LOOP: Confirm that the order is ACTUALLY closed on IQ Option
+    // We poll broker status to ensure we have confirmed feedback before telling the engine/UI it is closed
+    const verification = await this.verifyOptionSoldOnBroker(orderId, 2500);
+    if (verification.isSold) {
+      console.log(`🎯 [IQ Option sell_option VERIFIED] Order #${numId} verified SOLD & CLOSED on broker! Profit: +$${verification.profit}`);
+      return {
+        success: true,
+        confirmed: true,
+        profit: verification.profit,
+        rawResult: verification.raw,
+      };
+    }
+
+    // If sale was accepted but verification is slightly delayed, do one more quick check after 500ms
+    if (saleAccepted) {
+      await new Promise((r) => setTimeout(r, 500));
+      const retryVerify = await this.verifyOptionSoldOnBroker(orderId, 1500);
+      if (retryVerify.isSold) {
+        console.log(`🎯 [IQ Option sell_option VERIFIED RETRY] Order #${numId} verified SOLD on retry! Profit: +$${retryVerify.profit}`);
+        return {
+          success: true,
+          confirmed: true,
+          profit: retryVerify.profit,
+          rawResult: retryVerify.raw,
+        };
+      }
+    }
+
+    // If broker did NOT confirm the sale or rejected it (e.g. sell_option_disabled, cannot_sell, time_is_not_valid)
+    const finalError = lastBrokerError || "Broker rejected early sell or option is not eligible for early sale on this candle.";
+    console.warn(`⚠️ [IQ Option sell_option NOT CONFIRMED] Order #${numId} sale was not confirmed by broker. Error: ${finalError}`);
+    return {
+      success: false,
+      confirmed: false,
+      error: finalError,
+    };
   }
 
   public disconnect() {

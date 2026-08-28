@@ -136,10 +136,11 @@ export function getNearestValidIQTimeframe(calculatedMinutes: number): { duratio
 }
 
 /**
- * Calculates the exact single trade timer target (Level 3 time minus Entry time),
- * with automatic fallback to the nearest valid IQ Option timeframe (e.g. 6m -> 5m).
+ * Calculates the single trade expiration target:
+ * Uses Entry time and Level 1 time (or signal Timer:) as the direct contract expiration duration,
+ * with automatic mapping to the nearest valid IQ Option timeframe (e.g. 5m / M5, 1m / M1, 2m / M2).
  */
-export function calculateLevel3TargetTimer(
+export function calculateLevel1TargetTimer(
   rawClean: string,
   entryTimeStr?: string,
   baseTimerMins: number = 5
@@ -147,65 +148,51 @@ export function calculateLevel3TargetTimer(
   durationMinutes: number;
   timeframe: string;
   calculatedMinutes: number;
-  level3TimeStr?: string;
+  level1TimeStr?: string;
   method: string;
 } {
-  // 1. Check explicit Level 3 / Gale 3 / MG 3 line e.g. "Level 3 → 4:30 PM", "L3: 16:30", "Gale 3 - 4:30"
-  const l3Match = rawClean.match(/(?:Level\s*3|L3|Gale\s*3|G3|MG\s*3|Martingale\s*3)\s*(?:[→\-:>–—]|\bto\b|@)?\s*([0-2]?[0-9]:[0-5][0-9](?::[0-5][0-9])?(?:\s*(?:AM|PM|am|pm))?)/i);
+  // 1. Check explicit Level 1 line e.g. "Level 1 → 4:26 PM", "L1: 16:26", "Gale 1 - 4:26"
+  const l1Match = rawClean.match(/(?:Level\s*1|L1|Gale\s*1|G1|MG\s*1|MG1|1st\s*Gale|1[°º]\s*Gale|Primeiro\s*Gale|Step\s*1)\s*(?:[→\-:>–—=]|\bto\b|@)?\s*([0-2]?[0-9]:[0-5][0-9](?::[0-5][0-9])?(?:\s*(?:AM|PM|am|pm))?)/i);
   
-  if (l3Match && entryTimeStr) {
-    const level3Time = l3Match[1].trim();
-    const diff = calculateMinutesDiff(entryTimeStr, level3Time);
+  if (l1Match && entryTimeStr) {
+    const level1Time = l1Match[1].trim();
+    const diff = calculateMinutesDiff(entryTimeStr, level1Time);
     if (diff !== null && diff > 0) {
       const nearest = getNearestValidIQTimeframe(diff);
       return {
         durationMinutes: nearest.durationMinutes,
         timeframe: nearest.timeframe,
         calculatedMinutes: diff,
-        level3TimeStr: level3Time,
-        method: `Level 3 Target (${level3Time} - ${entryTimeStr} = ${diff}m -> Valid IQ: ${nearest.durationMinutes}m / ${nearest.timeframe})`,
+        level1TimeStr: level1Time,
+        method: `Level 1 Expiry Target (${entryTimeStr} -> ${level1Time} = ${diff}m -> Valid IQ: ${nearest.durationMinutes}m / ${nearest.timeframe})`,
       };
     }
   }
 
-  // 2. Check Level 2 and Level 1 if Level 3 not found
-  const l1Match = rawClean.match(/(?:Level\s*1|L1|Gale\s*1|G1|MG\s*1|Martingale\s*1)\s*(?:[→\-:>–—]|\bto\b|@)?\s*([0-2]?[0-9]:[0-5][0-9](?::[0-5][0-9])?(?:\s*(?:AM|PM|am|pm))?)/i);
-  if (l1Match && entryTimeStr) {
-    const l1Time = l1Match[1].trim();
-    const stepDiff = calculateMinutesDiff(entryTimeStr, l1Time);
-    if (stepDiff !== null && stepDiff > 0) {
-      const projectedL3Diff = stepDiff * 3; // 3 steps to Level 3
-      const nearest = getNearestValidIQTimeframe(projectedL3Diff);
-      return {
-        durationMinutes: nearest.durationMinutes,
-        timeframe: nearest.timeframe,
-        calculatedMinutes: projectedL3Diff,
-        method: `Projected Level 3 (Step: ${stepDiff}m x 3 = ${projectedL3Diff}m -> Valid IQ: ${nearest.durationMinutes}m / ${nearest.timeframe})`,
-      };
-    }
-  }
-
-  // 3. Fallback using base timer: 3 steps of timer duration
+  // 2. Check explicit Timer: / Expiry: in signal e.g. "Timer: 5m", "Expiry: 1 minute", "TF: M5"
   if (baseTimerMins > 0) {
-    const projectedMins = baseTimerMins * 3;
-    const nearest = getNearestValidIQTimeframe(projectedMins);
+    const nearest = getNearestValidIQTimeframe(baseTimerMins);
     return {
       durationMinutes: nearest.durationMinutes,
       timeframe: nearest.timeframe,
-      calculatedMinutes: projectedMins,
-      method: `Base Timer 3-Step Target (${baseTimerMins}m x 3 = ${projectedMins}m -> Valid IQ: ${nearest.durationMinutes}m / ${nearest.timeframe})`,
+      calculatedMinutes: baseTimerMins,
+      method: `Signal Timer Expiry (${baseTimerMins}m -> Valid IQ: ${nearest.durationMinutes}m / ${nearest.timeframe})`,
     };
   }
 
-  // Default fallback 5 minutes
+  // 3. Default fallback 5 minutes
   const nearest = getNearestValidIQTimeframe(5);
   return {
     durationMinutes: nearest.durationMinutes,
     timeframe: nearest.timeframe,
     calculatedMinutes: 5,
-    method: `Default Valid IQ: 5m / M5`,
+    method: `Default Valid IQ Expiry: 5m / M5`,
   };
 }
+
+// Backward-compatible alias for calculateLevel1TargetTimer
+export const calculateLevel3TargetTimer = calculateLevel1TargetTimer;
+export const calculateSignalExpirationTimer = calculateLevel1TargetTimer;
 
 export interface SignalLevelCheckpoints {
   entryTime?: string;

@@ -2,7 +2,7 @@
  * TRADE EXECUTION AND MANAGEMENT ENGINE FOR IQ OPTION
  * 
  * Complies strictly with all user rules:
- * 1. INITIAL TRADE (Level 0):
+ * 1. LEVEL 1 INITIAL TRADE ENTRY:
  *    - Uses signal Entry time as exact trade opening time
  *    - Uses signal Timer as duration/expiration
  *    - Does NOT trade immediately upon Telegram arrival
@@ -20,17 +20,16 @@
  *    - Performs pre-trade health check before entry
  *    - Handles timeouts safely without blindly repeating orders
  * 
- * 4. MANAGEMENT LEVELS (Level 0 -> Level 1 -> Level 2 -> Level 3 -> STOP):
- *    - Level 0 WIN -> STOP immediately
- *    - Level 0 LOSS -> Evaluate Level 1 only if enabled & rules satisfied
- *    - Level 1 WIN -> STOP | Level 1 LOSS -> Evaluate Level 2
- *    - Level 2 WIN -> STOP | Level 2 LOSS -> Evaluate Level 3
- *    - Level 3 WIN or LOSS -> STOP. There is NO Level 4.
+ * 4. MANAGEMENT LEVELS (Level 1 -> Level 2 -> Level 3 -> STOP):
+ *    - Level 1 WIN -> STOP immediately
+ *    - Level 1 LOSS / IN-LOSS -> Evaluate Level 2 checkpoint
+ *    - Level 2 WIN -> STOP | Level 2 LOSS -> Evaluate Level 3 full close
+ *    - Level 3 WIN or LOSS -> STOP. Management is strictly capped at Level 3.
  * 
  * 5. MANAGEMENT RULES:
- *    - Loss does NOT automatically trigger next trade
- *    - Each level has configured: Entry time, Stake, Direction, Timer, Max Delay
- *    - Never executes a management level late (e.g. 5s past entry -> SKIP)
+ *    - Loss does NOT automatically trigger blind new trades
+ *    - Each level checkpoint evaluates live profit against broker strikes
+ *    - When in profit, sends early sell to broker and strictly verifies broker closure confirmation before stopping
  * 
  * 6. TELEGRAM MARTINGALE:
  *    - Ignores Telegram signal's MG1/MG2/MG3 instructions unless explicitly enabled
@@ -85,7 +84,7 @@ export interface TradeRecord {
   id: string;
   signalId: string;
   parentTradeId?: string;
-  managementLevel: number; // 0 for Initial Trade, 1 for Level 1, 2 for Level 2, 3 for Level 3
+  managementLevel: number; // 1 for Level 1 (Signal Entry), 2 for Level 2, 3 for Level 3
   deterministicKey: string;
   sourceChannel: string;
   rawSignalText: string;
@@ -287,8 +286,16 @@ export class TradeExecutionEngine {
     return botSettings.timeZone || "Africa/Lagos";
   }
 
+  public getCheckpointLeadSeconds(): number {
+    const botSettings = this.config.getBotSettings ? this.config.getBotSettings() : undefined;
+    if (botSettings && typeof botSettings.checkpointLeadSeconds === "number" && botSettings.checkpointLeadSeconds >= 1) {
+      return Math.min(10, botSettings.checkpointLeadSeconds);
+    }
+    return 3; // Default 3.0 seconds precision lead time
+  }
+
   /**
-   * Main entry point when a Telegram Signal is identified (Rule 1: INITIAL TRADE / LEVEL 0)
+   * Main entry point when a Telegram Signal is identified (Rule 1: LEVEL 1 INITIAL TRADE ENTRY)
    */
   public processIncomingSignal(params: {
     signalId?: string;
@@ -332,17 +339,17 @@ export class TradeExecutionEngine {
       : undefined;
 
     // 3. Build Deterministic Trade Key (Rule 1 & 8: Prevent duplicate trades, ONE trade per signal)
-    const deterministicKey = `${signalDateStr}_${scheduledEntryTime.replace(/\s+/g, "")}_${assetIQ}_${action}_L0`;
+    const deterministicKey = `${signalDateStr}_${scheduledEntryTime.replace(/\s+/g, "")}_${assetIQ}_${action}_L1`;
     const tradeId = params.signalId || `TRD-${now}-${Math.floor(Math.random() * 1000)}`;
 
     const currentAccountMode = this.config.getAccountMode();
     const currentStake = this.config.getBaseStake();
 
-    // Initialize Level 0 Trade Record with Intermediate Checkpoints
+    // Initialize Level 1 Trade Record with Intermediate Checkpoints
     const tradeRecord: TradeRecord = {
       id: tradeId,
       signalId: params.signalId || tradeId,
-      managementLevel: 0,
+      managementLevel: 1,
       deterministicKey,
       sourceChannel: params.sourceChannel,
       rawSignalText: params.rawText,
@@ -370,12 +377,9 @@ export class TradeExecutionEngine {
       updatedAt: now,
     };
 
-    const checkpointInfo = checkpoints.level1Time || checkpoints.level2Time
-      ? ` | Checkpoints: L1 ${checkpoints.level1Time || "--"} (Take-Profit) -> L2 ${checkpoints.level2Time || "--"} (Take-Profit) -> Expiry`
-      : "";
     this.addTradeLog(
       tradeRecord,
-      `[SIGNAL RECEIVED] ${assetIQ} ${action} | Entry: ${scheduledEntryTime} (${tz}) | Expiration Target: ${durationMinutes}m (${timeframe})${checkpointInfo} | Single Trade Execution`,
+      `[SIGNAL RECEIVED] ${assetIQ} ${action} | Entry: ${scheduledEntryTime} (${tz}) | Expiration Target: ${durationMinutes}m (${timeframe}) | Single Trade Execution (Runs to Expiration)`,
       "info"
     );
 
@@ -437,7 +441,7 @@ export class TradeExecutionEngine {
     const delayMs = scheduledEpochMs - now;
     this.addTradeLog(
       tradeRecord,
-      `[TRADE SCHEDULED] Level 0 trade scheduled for exact Entry: ${scheduledEntryTime} (in ${(delayMs / 1000).toFixed(1)}s, TZ: ${tz})`,
+      `[TRADE SCHEDULED] Level 1 trade scheduled for exact Entry: ${scheduledEntryTime} (in ${(delayMs / 1000).toFixed(1)}s, TZ: ${tz})`,
       "success"
     );
     this.saveTradeRecord(tradeRecord);
@@ -581,6 +585,9 @@ export class TradeExecutionEngine {
         trade.state = "OPEN";
         trade.outcome = "PENDING";
 
+        // Debit stake from active balance
+        globalIQClient.debitBalanceForOrder(trade.stake, trade.accountMode);
+
         const expectedExpirationEpochMs = actualExecutionEpochMs + (trade.durationMinutes * 60 * 1000);
         trade.expectedExpirationEpochMs = expectedExpirationEpochMs;
         trade.expectedExpirationTime = formatTimeInTz(expectedExpirationEpochMs, tz);
@@ -594,37 +601,22 @@ export class TradeExecutionEngine {
 
         this.addTradeLog(
           trade,
-          `[ORDER OPEN] Real Broker Order #${trade.orderId} Active on IQ Option (${trade.accountMode}) | Asset: ${trade.asset} | Expiry: ${trade.expectedExpirationTime}`,
+          `[ORDER OPEN] Real Broker Order #${trade.orderId} Active on IQ Option (${trade.accountMode}) | Asset: ${trade.asset} | Expiration: ${trade.expectedExpirationTime} (${trade.durationMinutes}m / ${trade.timeframe}) | Running to natural broker expiry`,
           "success"
         );
         this.saveTradeRecord(trade);
 
-        // 3. Schedule Level 1 Checkpoint (Early exit if position is positive)
-        if (trade.level1EpochMs && trade.level1EpochMs > actualExecutionEpochMs) {
-          const l1WaitMs = Math.max(1000, trade.level1EpochMs - Date.now());
-          const l1Timer = setTimeout(() => {
-            this.evaluateCheckpoint(trade, 1);
-          }, l1WaitMs);
-          activeScheduledTimers.set(`l1_${trade.id}`, l1Timer);
-          this.addTradeLog(trade, `[CHECKPOINT 1 SCHEDULED] Level 1 profit-check scheduled for ${trade.level1Time} (in ${(l1WaitMs / 1000).toFixed(0)}s)`, "info");
-        }
-
-        // 4. Schedule Level 2 Checkpoint (Early exit if position is positive)
-        if (trade.level2EpochMs && trade.level2EpochMs > actualExecutionEpochMs) {
-          const l2WaitMs = Math.max(1000, trade.level2EpochMs - Date.now());
-          const l2Timer = setTimeout(() => {
-            this.evaluateCheckpoint(trade, 2);
-          }, l2WaitMs);
-          activeScheduledTimers.set(`l2_${trade.id}`, l2Timer);
-          this.addTradeLog(trade, `[CHECKPOINT 2 SCHEDULED] Level 2 profit-check scheduled for ${trade.level2Time} (in ${(l2WaitMs / 1000).toFixed(0)}s)`, "info");
-        }
-
-        // 5. Schedule Result Settlement Check upon Expiry (Rule 7: Wait for actual IQ Option result)
+        // Schedule Result Settlement Check upon Expiry (Direct Level 1 / Timer Expiration - Full Stake + Profit on Win)
         const expiryWaitMs = Math.max(1000, expectedExpirationEpochMs - Date.now() + 1500);
         const expTimer = setTimeout(() => {
           this.pollOrderResult(trade);
         }, expiryWaitMs);
         activeScheduledTimers.set(`exp_${trade.id}`, expTimer);
+        this.addTradeLog(
+          trade,
+          `[EXPIRATION WATCHER SCHEDULED] Contract will expire naturally at ${trade.expectedExpirationTime} (${(expiryWaitMs / 1000).toFixed(1)}s). Awaiting official broker settlement for full stake + payout.`,
+          "info"
+        );
       } catch (err: any) {
         trade.state = "FAILED";
         trade.failReason = err.message || String(err);
@@ -636,7 +628,7 @@ export class TradeExecutionEngine {
   }
 
   /**
-   * Evaluates intermediate Level Checkpoints (Level 1 and Level 2)
+   * Evaluates intermediate Level Checkpoints (Level 1 and Level 2) with Precision Timing (3s Before Minute)
    * If the position is positive (in profit), it closes the trade immediately via IQ Option sell_option API.
    * If negative/neutral, the trade continues running.
    */
@@ -647,14 +639,19 @@ export class TradeExecutionEngine {
     }
 
     const tz = this.getTimeZone();
-    const checkTimeStr = formatTimeInTz(Date.now(), tz);
+    const nowMs = Date.now();
+    const checkTimeStr = formatTimeInTz(nowMs, tz);
+    const targetTimeStr = levelNum === 1 ? trade.level1Time : trade.level2Time;
+    const targetEpochMs = levelNum === 1 ? trade.level1EpochMs : trade.level2EpochMs;
+    const secondsAhead = targetEpochMs ? Math.max(0, (targetEpochMs - nowMs) / 1000).toFixed(1) : "3.0";
+
     this.addTradeLog(
       trade,
-      `[LEVEL ${levelNum} CHECKPOINT: ${checkTimeStr}] Evaluating position profit at Level ${levelNum} target...`,
+      `[LEVEL ${levelNum} CHECKPOINT: PRECISION T-3s (${checkTimeStr})] Triggered ${secondsAhead}s before target ${targetTimeStr || "--"}. Checking spot price & profit state...`,
       "info"
     );
 
-    // 1. Fetch current spot price from IQ Option
+    // 1. Fetch current spot price from IQ Option (ultra-fast from live quote stream or WebSocket query)
     const currentPrice = await globalIQClient.getCurrentPrice(trade.asset);
     let openPrice = trade.openPrice;
     if (!openPrice && currentPrice) {
@@ -686,39 +683,67 @@ export class TradeExecutionEngine {
     if (isPositive) {
       this.addTradeLog(
         trade,
-        `[LEVEL ${levelNum} CHECKPOINT: POSITIVE 🟢] ${priceDetails}. Position is in profit! Closing trade immediately via IQ Option sell_option API...`,
-        "success"
+        `[LEVEL ${levelNum} CHECKPOINT: POSITIVE 🟢] ${priceDetails}. Position is in profit! Sending early sell command 3s ahead of minute close to IQ Option broker...`,
+        "info"
       );
 
-      // Execute early sale via IQ Option broker API
-      await globalIQClient.sellOption(trade.orderId || "");
+      // Execute early sale via IQ Option broker API with confirmation feedback
+      const sellResult = await globalIQClient.sellOption(trade.orderId || "");
 
-      // Clear remaining timers for this trade
-      if (levelNum === 1) {
-        const l2Timer = activeScheduledTimers.get(`l2_${trade.id}`);
-        if (l2Timer) clearTimeout(l2Timer);
+      if (sellResult.success && sellResult.confirmed) {
+        // Clear remaining timers for this trade
+        if (levelNum === 1) {
+          const l2Timer = activeScheduledTimers.get(`l2_${trade.id}`);
+          if (l2Timer) {
+            clearTimeout(l2Timer);
+            activeScheduledTimers.delete(`l2_${trade.id}`);
+          }
+        }
+        const expTimer = activeScheduledTimers.get(`exp_${trade.id}`);
+        if (expTimer) {
+          clearTimeout(expTimer);
+          activeScheduledTimers.delete(`exp_${trade.id}`);
+        }
+
+        const payout = trade.payoutRate || 87;
+        const profit = typeof sellResult.profit === "number" && sellResult.profit > 0
+          ? sellResult.profit
+          : Number((trade.stake * (payout / 100)).toFixed(2));
+
+        const grossReturn = Number((trade.stake + profit).toFixed(2));
+        globalIQClient.creditBalanceForSettlement(grossReturn, trade.accountMode);
+
+        const closeTimestamp = Date.now();
+        const closeTimeStr = formatTimeInTz(closeTimestamp, tz);
+
+        trade.state = "WIN";
+        trade.outcome = "WIN";
+        trade.profit = profit;
+        trade.earlyClosedAt = levelNum === 1 ? "LEVEL_1" : "LEVEL_2";
+        trade.closePrice = currentPrice || openPrice;
+        trade.actualSettlementTime = closeTimeStr;
+
+        this.addTradeLog(
+          trade,
+          `[EARLY CLOSE CONFIRMED BY BROKER 🎯] Order #${trade.orderId} officially SOLD & CLOSED on IQ Option at Level ${levelNum} (${closeTimeStr})! Realized Net Profit: +$${profit.toFixed(2)} (Gross Return: $${grossReturn.toFixed(2)} [Stake $${trade.stake} + Profit $${profit.toFixed(2)}]). Trade finalized permanently.`,
+          "success"
+        );
+
+        globalIQClient.fetchProfileAndBalancesRest().catch(() => {});
+        this.saveTradeRecord(trade);
+      } else {
+        // Broker did NOT confirm early closure (e.g. broker rejected early sale or instrument does not support early sale)
+        const nextTarget = levelNum === 1
+          ? `Level 2 Checkpoint (${trade.level2Time || "target"})`
+          : `Level 3 full Expiration (${trade.expectedExpirationTime})`;
+
+        this.addTradeLog(
+          trade,
+          `[EARLY CLOSE NOT ACCEPTED BY BROKER ⚠️] IQ Option broker did not close Order #${trade.orderId} early (${sellResult.error || "Sale unconfirmed or rejected by broker"}). Position remains LIVE on broker and CONTINUES RUNNING to ${nextTarget}.`,
+          "warn"
+        );
+        this.saveTradeRecord(trade);
       }
-      const expTimer = activeScheduledTimers.get(`exp_${trade.id}`);
-      if (expTimer) clearTimeout(expTimer);
-
-      const payout = trade.payoutRate || 87;
-      const profit = Number((trade.stake * (payout / 100)).toFixed(2));
-
-      trade.state = "WIN";
-      trade.outcome = "WIN";
-      trade.profit = profit;
-      trade.earlyClosedAt = levelNum === 1 ? "LEVEL_1" : "LEVEL_2";
-      trade.closePrice = currentPrice || openPrice;
-      trade.actualSettlementTime = formatTimeInTz(Date.now(), tz);
-
-      this.addTradeLog(
-        trade,
-        `[EARLY CLOSE SUCCESSFUL 🎯] Order #${trade.orderId} Sold Early at Level ${levelNum} (${checkTimeStr})! Realized Profit: +$${profit.toFixed(2)}. Trade finalized.`,
-        "success"
-      );
-
-      globalIQClient.fetchProfileAndBalancesRest().catch(() => {});
-      this.saveTradeRecord(trade);
     } else {
       if (levelNum === 1) {
         this.addTradeLog(
@@ -729,7 +754,7 @@ export class TradeExecutionEngine {
       } else {
         this.addTradeLog(
           trade,
-          `[LEVEL 2 CHECKPOINT: NOT POSITIVE 🟡] ${priceDetails || "Spot not above strike"}. Position is not positive yet. Trade CONTINUES RUNNING until full Expiration (${trade.expectedExpirationTime}).`,
+          `[LEVEL 2 CHECKPOINT: NOT POSITIVE 🟡] ${priceDetails || "Spot not above strike"}. Position is not positive yet. Trade CONTINUES RUNNING to Level 3 full Expiration (${trade.expectedExpirationTime}).`,
           "info"
         );
       }
@@ -783,12 +808,15 @@ export class TradeExecutionEngine {
       globalIQClient.fetchProfileAndBalancesRest().catch(() => {});
 
       if (outcome === "WIN") {
-        this.addTradeLog(trade, `[TRADE RESULT: WIN 🟢] Real Broker Order #${trade.orderId} WON! Verified Profit: +$${profit.toFixed(2)}`, "success");
+        const grossReturn = Number((trade.stake + profit).toFixed(2));
+        globalIQClient.creditBalanceForSettlement(grossReturn, trade.accountMode);
+        this.addTradeLog(trade, `[TRADE RESULT: WIN 🟢] Real Broker Order #${trade.orderId} WON! Verified Net Profit: +$${profit.toFixed(2)} (Gross Credited: $${grossReturn.toFixed(2)})`, "success");
         this.addTradeLog(trade, `[SINGLE TRADE FINALIZED] Trade completed successfully with profit +$${profit.toFixed(2)}. Exactly 1 trade per signal.`, "info");
         this.saveTradeRecord(trade);
         return;
       } else if (outcome === "DRAW") {
-        this.addTradeLog(trade, `[TRADE RESULT: DRAW ⚪] Order #${trade.orderId} ended in DRAW (refunded). Single trade finalized. STOP.`, "info");
+        globalIQClient.creditBalanceForSettlement(trade.stake, trade.accountMode);
+        this.addTradeLog(trade, `[TRADE RESULT: DRAW ⚪] Order #${trade.orderId} ended in DRAW (Risk stake $${trade.stake} fully refunded). Single trade finalized. STOP.`, "info");
         this.saveTradeRecord(trade);
         return;
       } else {

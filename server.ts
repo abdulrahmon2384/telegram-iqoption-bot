@@ -25,6 +25,7 @@ import {
   formatDateInTz,
   getActiveTimezone,
   setActiveTimezone,
+  calculateLevel1TargetTimer,
   calculateLevel3TargetTimer,
   getNearestValidIQTimeframe,
   calculateMinutesDiff,
@@ -218,17 +219,17 @@ export function parseTradingSignal(text: string): SignalParseResult {
     }
   }
 
-  // Level 3 Target Calculation:
-  // Duration is calculated from Entry time to Level 3 time (e.g. 4:24 PM to 4:30 PM = 6m).
-  // If the calculated duration isn't a valid IQ Option timeframe, fall back to nearest valid timeframe (e.g. 6m -> 5m / M5).
-  const l3TimerResult = calculateLevel3TargetTimer(rawClean, scheduledTime, baseTimerMinutes);
-  const durationMinutes = l3TimerResult.durationMinutes;
-  const timeframe = l3TimerResult.timeframe;
+  // Level 1 / Timer Target Expiration Calculation:
+  // Duration is determined from Entry time to Level 1 time or signal Timer: (e.g. Timer: 5m, or Entry 4:24 PM -> Level 1 4:29 PM = 5m).
+  // Automatically mapped to the nearest valid IQ Option timeframe (e.g. 5m / M5, 1m / M1, 2m / M2).
+  const l1TimerResult = calculateLevel1TargetTimer(rawClean, scheduledTime, baseTimerMinutes);
+  const durationMinutes = l1TimerResult.durationMinutes;
+  const timeframe = l1TimerResult.timeframe;
 
-  if (l3TimerResult.level3TimeStr && scheduledTime) {
-    notes.push(`🎯 Level 3 Timer Target: Entry ${scheduledTime} to Level 3 ${l3TimerResult.level3TimeStr} = ${l3TimerResult.calculatedMinutes}m (IQ Valid Fallback: ${timeframe} - ${durationMinutes} min)`);
+  if (l1TimerResult.level1TimeStr && scheduledTime) {
+    notes.push(`🎯 Level 1 Expiration Target: Entry ${scheduledTime} to Level 1 ${l1TimerResult.level1TimeStr} = ${l1TimerResult.calculatedMinutes}m (IQ Valid Expiry: ${timeframe} - ${durationMinutes} min)`);
   } else {
-    notes.push(`🎯 Timer Target: ${l3TimerResult.method}`);
+    notes.push(`🎯 Expiration Target: ${l1TimerResult.method}`);
   }
 
   // 5. ENFORCE STRICT SINGLE TRADE (NO MARTINGALE RETAKES)

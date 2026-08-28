@@ -101,6 +101,7 @@ export default function App() {
     minPayout: 80,
     martingaleMultiplier: 2.2,
     maxGaleSteps: 1,
+    checkpointLeadSeconds: 3,
     dailyStopLoss: 500,
     dailyTakeProfit: 1000,
     timeZone: "Africa/Lagos",
